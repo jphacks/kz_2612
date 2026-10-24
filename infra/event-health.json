@@ -1,0 +1,1 @@
+{"version":"2.0","routeKey":"$default","rawPath":"/health","rawQueryString":"","headers":{"host":"localhost"},"requestContext":{"http":{"method":"GET","path":"/health","sourceIp":"127.0.0.1","protocol":"HTTP/1.1","userAgent":"curl"},"stage":"$default"},"isBase64Encoded":false}
