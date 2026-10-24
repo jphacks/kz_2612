@@ -193,7 +193,7 @@ await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
   "ok": false,
   "result": {
     "ok": false,
-    "reason": "pose_mismatch",      // count_mismatch | pose_mismatch | body_not_visible | no_person | null
+    "reason": "pose_mismatch",      // count_mismatch | pose_mismatch | body_not_visible | no_person | face_not_visible | face_mismatch | null
     "score": 62,                    // 一致度ゲージ 0〜100。許容値ちょうどで70
     "message": "あと少し！右の人の右手をもう少し上に",   // そのまま表示してよい
     "expected_people": 2,
@@ -213,7 +213,8 @@ await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
           "right_elbow": { "key_deg": 170.0, "attempt_deg": 129.0, "diff_deg": 41.0, "ok": false }
         }
       }
-    ]
+    ],
+    "faces": []                     // 顔の判定。ポーズが合ったときだけ入る（下の例）
   },
   "attempts_left": 4,
   "locked_until": null,
@@ -251,6 +252,22 @@ await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
 - 当時は写っていたのに今は隠れている点は、1人2点まで許す（少しずれた扱いで、スコアが下がる）。3点以上隠れると `reason: "body_not_visible"` と `missing_joints` を返す
 - 点の名前: `left_elbow` `right_elbow` `left_wrist` `right_wrist` `left_knee` `right_knee` `left_ankle` `right_ankle`（左右は写っている本人から見た左右）
 - 関節の角度（`joints`）は表示用。ひじを曲げたポーズでは少し動くだけで角度が大きく変わるので、合否には使わない
+
+**顔の判定**（ポーズが合ったあとに行う）
+
+```json
+"faces": [
+  { "position": 0, "visible": true, "checked": true, "ok": true,  "similarity": 0.82, "others": 0.25 },
+  { "position": 1, "visible": true, "checked": true, "ok": false, "similarity": 0.10, "others": 0.05 }
+]
+```
+
+- 立ち位置ごとに、**鍵の写真の顔と、これまで開けたときの顔（顔の記憶）**のうち、いちばん似ている顔と比べる。`similarity` は −1〜1
+- `similarity` が 0.40 以上、かつ、ほかの立ち位置の人の記憶（`others`）より 0.05 以上似ていれば `ok`
+- 顔が見えない人がいると `reason: "face_not_visible"`、本人と確かめられない人がいると `reason: "face_mismatch"`（`message` に声かけが入る）
+- `checked: false` は、鍵の写真でその人の顔が見えず、まだ記憶がない人（判定しない。開けたときの顔から覚える）
+- 開けるのに成功すると、そのときの顔が記憶に加わる（年月で顔が変わってもついていける）
+- 詳細（`GET /capsules/{id}`）の `guide[].face_registered` で、顔の記憶があるかわかる
 - 失敗によるロックは既定で無し（何回でも撮り直せる。`attempts_left` は `null`）。`EMO_MAX_FAILURES` を設定すると、その回数の失敗でロックされ 423 `locked` になる。失敗に数えるのは `count_mismatch` と `pose_mismatch` だけ
 - 何度でも開けられる。開けるたびに認証アルバムに写真が増える（F-7）
 
@@ -422,6 +439,10 @@ docker run --rm -p 9000:8080 -e EMO_BUCKET=... -e EMO_TABLE=... -e AWS_REGION=ap
 | `EMO_UNLOCK_MINUTES` | | `0` | ポーズで解除してからライブラリを使える時間（分）。0 は期限なし |
 | `EMO_POINT_TOLERANCE` | | `0.35` | 点の位置のずれの許容値（肩幅を1） |
 | `EMO_MAX_MISSING_POINTS` | | `2` | 開けるとき、当時写っていた点が何点まで隠れてよいか |
+| `EMO_FACE_CHECK` | | `true` | 顔の判定をするか |
+| `EMO_FACE_THRESHOLD` / `EMO_FACE_MARGIN` | | `0.40` / `0.05` | 顔の類似度のしきい値と、ほかの人との差 |
+| `EMO_MAX_HIDDEN_FACES` | | `0` | 顔が見えなくてもよい人数 |
+| `EMO_FACE_MEMORY` | | `5` | 開けたときの顔を1人何件まで覚えるか |
 | `EMO_MAX_FAILURES` / `EMO_LOCK_MINUTES` | | `0` / `10` | 何回失敗したら何分ロックするか。0 はロックしない |
 | `EMO_DETECTION_CONFIDENCE` | | `0.2` | 人物検出のしきい値 |
 

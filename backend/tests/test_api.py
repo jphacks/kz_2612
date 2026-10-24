@@ -51,6 +51,8 @@ def env(tmp_path):
         deps.get_storage: lambda: storage,
         deps.get_repository: lambda: repo,
         deps.get_detector: lambda: detector,
+        # 顔の判定は test_face_api.py で偽物に差し替えて試す。ここでは切っておく
+        deps.get_face_encoder: lambda: None,
     }
     storage = LocalStorage(tmp_path, "http://testserver")
     repo = Repository(JsonItemStore(None))

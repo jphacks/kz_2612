@@ -17,11 +17,21 @@ import uuid
 from fastapi import APIRouter, Depends, Header, Response
 from PIL import Image
 
-from app.deps import current_user, get_detector, get_match_config, get_repository, get_storage, settings_dep
+from app.deps import (
+    current_user,
+    get_detector,
+    get_face_config,
+    get_face_encoder,
+    get_match_config,
+    get_repository,
+    get_storage,
+    settings_dep,
+)
 from app.errors import ApiError
 from app.pose.angles import PersonPose
 from app.pose.config import MatchConfig
 from app.pose.base import Detector, PoseExtractionError, draw_overlay, load_image
+from app.pose.face import FaceConfig, FaceEncoder, assign_faces, match_faces, new_memory, update_memory
 from app.pose.matcher import match_poses
 from app.repository import Repository
 from app.routers.uploads import upload_prefix
@@ -49,7 +59,7 @@ log = logging.getLogger("emo")
 
 JST = dt.timezone(dt.timedelta(hours=9))
 # 失敗回数に数えるのは「揃って撮ったのに違った」ときだけ。誰も写っていない・体が切れているのは数えない
-COUNTED_FAILURES = ("count_mismatch", "pose_mismatch")
+COUNTED_FAILURES = ("count_mismatch", "pose_mismatch", "face_mismatch")
 
 ERRORS = {
     400: {"model": ErrorResponse},
@@ -156,7 +166,7 @@ def _detail(capsule: dict, role: str, repo: Repository, storage: Storage, settin
         preview_url=storage.presign_get(capsule["preview_key"], expires) if capsule.get("preview_key") else None,
         url_expires_in=expires,
         guide=[
-            GuidePerson(position=i, angles=p["angles"], points=p.get("points", {}))
+            GuidePerson(position=i, angles=p["angles"], points=p.get("points", {}), face_registered=bool(p.get("faces")))
             for i, p in enumerate(capsule["key_pose"]["people"])
         ],
         can_open_now=_is_open_day(capsule, settings) and locked_until is None,
@@ -180,6 +190,7 @@ def create_capsule(
     repo: Repository = Depends(get_repository),
     storage: Storage = Depends(get_storage),
     detector: Detector = Depends(get_detector),
+    face_encoder: FaceEncoder | None = Depends(get_face_encoder),
     settings: Settings = Depends(settings_dep),
 ) -> CapsuleDetail:
     image = _load_uploaded_image(storage, settings, body.key_photo_s3_key, upload_prefix(user["user_id"], "key"))
@@ -187,6 +198,9 @@ def create_capsule(
         people = detector.extract_key(image)
     except PoseExtractionError as e:
         raise ApiError(422, e.code, e.message, detected_people=e.detected_people) from e
+    # 鍵の写真の顔を、その人の最初の「顔の記憶」にする（顔が見えない人は、最初に開けたときの顔から覚える）
+    faces = (assign_faces(people, face_encoder.encode(image), image.width, image.height)
+             if face_encoder else [None] * len(people))
 
     capsule_id = uuid.uuid4().hex[:12]
     preview = io.BytesIO()
@@ -201,8 +215,10 @@ def create_capsule(
         "open_date": body.open_date.isoformat() if body.open_date else None,
         "key_photo_key": body.key_photo_s3_key,
         "preview_key": preview_key,
-        # 鍵として保存するのは関節角度と体の点の座標だけ（顔の特徴は保存しない）
-        "key_pose": {"version": 1, "people": [{**p.to_dict(), "points": p.guide_points()} for p in people]},
+        # 鍵として保存するのは、点の位置・関節角度と、顔の特徴の数字（顔の画像は保存しない）
+        "key_pose": {"version": 1, "people": [
+            {**p.to_dict(), "points": p.guide_points(), "faces": new_memory(f)} for p, f in zip(people, faces)
+        ]},
         "status": "locked",
         "fail_count": 0,
         "locked_until": None,
@@ -211,7 +227,8 @@ def create_capsule(
     }
     repo.create_capsule(capsule)
     repo.add_member(capsule_id, user["user_id"], "owner", user.get("email"))
-    log.info(json.dumps({"event": "capsule_created", "capsule_id": capsule_id, "people": len(people)}))
+    log.info(json.dumps({"event": "capsule_created", "capsule_id": capsule_id, "people": len(people),
+                         "faces": sum(f is not None for f in faces)}))
     return _detail(capsule, "owner", repo, storage, settings)
 
 
@@ -305,6 +322,8 @@ def open_capsule(
     storage: Storage = Depends(get_storage),
     detector: Detector = Depends(get_detector),
     config: MatchConfig = Depends(get_match_config),
+    face_encoder: FaceEncoder | None = Depends(get_face_encoder),
+    face_config: FaceConfig = Depends(get_face_config),
     settings: Settings = Depends(settings_dep),
 ) -> OpenResponse:
     started = time.perf_counter()
@@ -320,7 +339,21 @@ def open_capsule(
 
     image = _load_uploaded_image(storage, settings, body.s3_key, upload_prefix(user["user_id"], "attempt"))
     key_people = [PersonPose.from_dict(p) for p in capsule["key_pose"]["people"]]
-    result = match_poses(key_people, detector.detect(image), config)
+    attempt_people = detector.detect(image)
+    result = match_poses(key_people, attempt_people, config)
+
+    # ポーズが合ったら、顔も当時の人（と、これまで開けたときの顔）と比べる
+    attempt_faces: list = []
+    if result.ok and face_encoder:
+        attempt_faces = assign_faces(sorted(attempt_people, key=lambda p: p.hip_center_x),
+                                     face_encoder.encode(image), image.width, image.height)
+        if result.mirrored:
+            attempt_faces = attempt_faces[::-1]  # 鍵の何番目の人に対応するかにそろえる
+        memories = [p.get("faces", []) for p in capsule["key_pose"]["people"]]
+        face_result = match_faces(memories, attempt_faces, face_config)
+        result.faces = [p.to_dict() for p in face_result.people]
+        if not face_result.ok:
+            result.ok, result.reason, result.message = False, face_result.reason, face_result.message
 
     fields: dict = {}
     fail_count = capsule.get("fail_count", 0)
@@ -329,6 +362,14 @@ def open_capsule(
         fields = {"status": "opened", "fail_count": 0, "locked_until": None}
         if not capsule.get("opened_at"):
             fields["opened_at"] = _now().isoformat()
+        if attempt_faces:
+            # 開けたときの顔を記憶に加える。開けるたびに今の顔へ更新されていくので、年月で顔が変わってもついていける
+            key_pose = capsule["key_pose"]
+            key_pose["people"] = [
+                {**p, "faces": update_memory(p.get("faces", []), f, face_config.memory)}
+                for p, f in zip(key_pose["people"], attempt_faces)
+            ]
+            fields["key_pose"] = key_pose
         repo.add_open_record({
             "capsule_id": capsule_id, "opened_at": _now().isoformat(), "photo_key": body.s3_key,
             "score": result.score, "user_id": user["user_id"],
@@ -348,7 +389,8 @@ def open_capsule(
         "event": "open_attempt",
         "capsule_id": capsule_id,
         "detected_people": result.detected_people,
-        "diffs": [p.mean_diff_deg and round(p.mean_diff_deg, 1) for p in result.people],
+        "point_diffs": [p.mean_point_diff and round(p.mean_point_diff, 2) for p in result.people],
+        "face_similarity": [f["similarity"] for f in result.faces],
         "ok": result.ok,
         "reason": result.reason,
         "fail_count": fail_count,
