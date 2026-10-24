@@ -10,6 +10,7 @@ from fastapi import Header
 
 from app.pose.base import Detector
 from app.pose.config import MatchConfig
+from app.pose.face import FaceConfig, FaceEncoder
 from app.repository import DynamoItemStore, JsonItemStore, Repository
 from app.settings import Settings, get_settings
 from app.storage import LocalStorage, S3Storage, Storage
@@ -48,6 +49,17 @@ def get_detector() -> Detector:
     from app.pose.rtm_detector import RtmPoseDetector
 
     return RtmPoseDetector(min_points_per_person=config.min_points_per_person)
+
+
+@lru_cache
+def get_face_config() -> FaceConfig:
+    return FaceConfig.from_env()
+
+
+@lru_cache
+def get_face_encoder() -> FaceEncoder | None:
+    """顔の判定を切っているときは None。"""
+    return FaceEncoder() if get_face_config().enabled else None
 
 
 @lru_cache
