@@ -4,3 +4,7 @@ pillow==13.0.0
 fastapi==0.162.0
 mangum==0.22.0
 boto3==1.43.118
+onnxruntime==1.31.0
+tqdm==4.70.1
+# rtmlib は依存に opencv-python を持っていて mediapipe の opencv-contrib-python とぶつかるので、
+# 別に `pip install --no-deps -r requirements-nodeps.txt` で入れる

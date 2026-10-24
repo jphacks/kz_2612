@@ -27,8 +27,18 @@ class MatchConfig:
     allow_mirror: bool = False
     # これ未満の visibility の関節は「写っていない」として比較から外す
     min_visibility: float = 0.5
-    # 1人あたり最低これだけの関節が比較できないと判定しない
-    min_joints_per_person: int = 4
+    # 関節の角度も合否に使うか。ひじを曲げたポーズでは少し動いただけで角度が大きく変わり厳しすぎるので、既定は表示用だけ
+    judge_with_angles: bool = False
+    # 1人あたり最低これだけの関節角度が比べられないと、角度は判定に使わない
+    min_joints_per_person: int = 2
+    # 点の位置のずれ（肩幅を1とした距離）。各人の平均がこれ以内なら一致
+    point_tolerance: float = 0.35
+    # 1点だけ大きくずれたときの上限（肩幅の何倍か）
+    max_point_diff: float = 1.0
+    # 当時は写っていたのに今は隠れている点を、1人何点まで許すか（隠れた点は point_tolerance のずれとして数える）
+    max_missing_points: int = 2
+    # 鍵にするには、1人あたり両肩と、これだけの点（ひじ・手首・ひざ・足首）が写っている必要がある
+    min_points_per_person: int = 2
 
     @classmethod
     def from_env(cls) -> "MatchConfig":
@@ -38,9 +48,14 @@ class MatchConfig:
             max_joint_diff_deg=_env_float("EMO_MAX_JOINT_DIFF_DEG", default.max_joint_diff_deg),
             allow_mirror=_env_bool("EMO_ALLOW_MIRROR", default.allow_mirror),
             min_visibility=_env_float("EMO_MIN_VISIBILITY", default.min_visibility),
+            judge_with_angles=_env_bool("EMO_JUDGE_WITH_ANGLES", default.judge_with_angles),
             min_joints_per_person=int(
                 _env_float("EMO_MIN_JOINTS_PER_PERSON", default.min_joints_per_person)
             ),
+            point_tolerance=_env_float("EMO_POINT_TOLERANCE", default.point_tolerance),
+            max_point_diff=_env_float("EMO_MAX_POINT_DIFF", default.max_point_diff),
+            max_missing_points=int(_env_float("EMO_MAX_MISSING_POINTS", default.max_missing_points)),
+            min_points_per_person=int(_env_float("EMO_MIN_POINTS_PER_PERSON", default.min_points_per_person)),
         )
 
 

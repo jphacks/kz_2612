@@ -32,14 +32,15 @@ class Settings:
     view_url_expires: int = 60
     max_upload_bytes: int = 10 * 1024 * 1024
 
-    max_failures: int = 5
+    # 何回失敗したらロックするか。0 ならロックしない（既定）。例: 5 にすると5回失敗で lock_minutes 分ロック
+    max_failures: int = 0
     lock_minutes: int = 10
     # デモ用: 開封日前でも開けるようにする
     ignore_open_date: bool = False
     # 招待リンクの有効期限（日）
     invite_days: int = 14
-    # ポーズで解除してからライブラリを使える時間（分）
-    unlock_minutes: int = 30
+    # ポーズで解除してからライブラリを使える時間（分）。0 なら期限なし（既定）
+    unlock_minutes: int = 0
 
     cors_origins: tuple[str, ...] = field(default_factory=lambda: ("*",))
 

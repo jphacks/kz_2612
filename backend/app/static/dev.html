@@ -60,14 +60,14 @@
   </section>
 
   <section>
-    <h2>① カプセルを作る</h2>
+    <h2>① フォルダを作る（鍵＝思い出の写真）</h2>
     <div class="row">
       <div>
-        <label>思い出の写真（鍵）</label>
+        <label>思い出の写真（このときのポーズが鍵になる）</label>
         <input id="keyFile" type="file" accept="image/*">
         <button class="secondary" id="keyFromCam">カメラで撮って鍵にする</button>
         <div id="keyCam" class="hidden">
-          <p class="status" style="margin:10px 0 0">💡 両ひじと両手首まで写るように、少し離れてポーズしてね（顔と肩だけだと鍵になりません）</p>
+          <p class="status" style="margin:10px 0 0">💡 両肩と、腕（ひじか手）が写るようにポーズしてね。片手を隠すなど自由なポーズでOK（顔と肩だけだと鍵になりません）</p>
           <div class="stage" style="margin-top:8px">
             <video id="keyVideo" autoplay playsinline muted></video>
             <div class="countdown" id="keyCountdown"></div>
@@ -75,11 +75,11 @@
           <button id="keyShoot">撮影（3秒後）</button>
           <button class="secondary" id="keyRetake" disabled>撮り直す</button>
         </div>
-        <label>カプセル名</label>
+        <label>フォルダ名</label>
         <input id="capName" type="text" value="テストカプセル">
         <label>開封日（任意。空ならいつでも開けられる）</label>
         <input id="openDate" type="date">
-        <button id="createBtn">カプセルを作る</button>
+        <button id="createBtn">フォルダを作る</button>
         <div class="status" id="createStatus"></div>
       </div>
       <div><img id="preview" class="photo hidden" alt="骨格プレビュー"></div>
@@ -87,13 +87,22 @@
   </section>
 
   <section>
-    <h2>② 中身を入れる</h2>
-    <label>カプセル</label>
+    <h2>② フォルダに写真を入れる</h2>
+    <p class="lead" style="margin:0">入れた写真は、みんなで鍵のポーズを再現してロックを解除したときだけ見られます。</p>
+    <label>フォルダ</label>
     <select id="capSelect"></select>
-    <label>メッセージ</label>
-    <textarea id="letter" rows="3">10年後の自分へ。元気にしてる？</textarea>
-    <button id="letterBtn">メッセージを入れる</button>
-    <div class="status" id="letterStatus"></div>
+    <div class="status" id="photoCount"></div>
+    <label>写真（何枚でも選べます）</label>
+    <input id="photoFiles" type="file" accept="image/*" multiple>
+    <div class="grid" id="photoPreview"></div>
+    <button id="photoBtn">写真を入れる</button>
+    <div class="status" id="photoStatus"></div>
+    <details style="margin-top:12px">
+      <summary class="status" style="cursor:pointer">ひとことメッセージも入れる（任意）</summary>
+      <textarea id="letter" rows="2" style="margin-top:6px">また集まろうね</textarea>
+      <button class="secondary" id="letterBtn">メッセージを入れる</button>
+      <div class="status" id="letterStatus"></div>
+    </details>
     <label style="margin-top:16px">メンバー</label>
     <div class="status" id="members" style="margin-top:0"></div>
     <button class="secondary" id="inviteBtn">招待リンクを作る</button>
@@ -143,7 +152,7 @@
 const API = location.origin;
 const $ = (id) => document.getElementById(id);
 const headers = () => ({ "Content-Type": "application/json", "X-User-Id": $("userId").value.trim() || "demo-user" });
-const JOINT_JA = { left_elbow:"左ひじ", right_elbow:"右ひじ", left_shoulder:"左腕", right_shoulder:"右腕", left_knee:"左ひざ", right_knee:"右ひざ" };
+const POINT_JA = { left_elbow:"左ひじ", right_elbow:"右ひじ", left_wrist:"左手", right_wrist:"右手", left_knee:"左ひざ", right_knee:"右ひざ", left_ankle:"左足", right_ankle:"右足", shoulders:"両肩" };
 const BONES = [["left_shoulder","right_shoulder"],["left_shoulder","left_elbow"],["left_elbow","left_wrist"],["right_shoulder","right_elbow"],["right_elbow","right_wrist"],["left_shoulder","left_hip"],["right_shoulder","right_hip"],["left_hip","right_hip"],["left_hip","left_knee"],["left_knee","left_ankle"],["right_hip","right_knee"],["right_knee","right_ankle"]];
 let stream = null, current = null;
 
@@ -207,7 +216,7 @@ async function refreshList(selectId) {
   const user = headers()["X-User-Id"];
   const list = await api("/capsules");
   if (stale(user)) return;
-  if (!list.length) { current = null; $("capSelect").innerHTML = ""; $("members").textContent = "（カプセルがまだありません）"; drawGuide(); return; }
+  if (!list.length) { current = null; $("capSelect").innerHTML = ""; $("members").textContent = "（フォルダがまだありません）"; drawGuide(); return; }
   $("capSelect").innerHTML = list.map(c =>
     `<option value="${c.capsule_id}">${c.name}（${c.people_count}人・${c.days_until_open === null ? "いつでも" : "あと" + c.days_until_open + "日"}）</option>`).join("");
   if (selectId) $("capSelect").value = selectId;
@@ -225,6 +234,7 @@ async function loadCapsule(id) {
     $("openedSec").classList.add("hidden"); $("librarySec").classList.add("hidden");
   }
   current = detail;
+  $("photoCount").textContent = `このフォルダに入っているもの：${detail.contents_count}件`;
   $("members").textContent = members.map(m => m.user_id + (m.role === "owner" ? "（作成者）" : "")).join("、");
   $("inviteBtn").classList.toggle("hidden", current.role !== "owner");
   $("inviteStatus").textContent = "";
@@ -332,8 +342,34 @@ $("letterBtn").onclick = async () => {
   const st = $("letterStatus");
   try {
     await api(`/capsules/${$("capSelect").value}/contents`, { method: "POST", body: JSON.stringify({ type: "message", text: $("letter").value }) });
-    st.textContent = "メッセージを入れました（開けるまで見られません）";
+    st.textContent = "メッセージを入れました（ロックを解除すると見られます）";
+    await loadCapsule($("capSelect").value);
   } catch (e) { st.innerHTML = `<span class="error">${e.message}</span>`; }
+};
+
+// 選んだ写真をアップロード前に小さく並べて見せる（端末の中だけで表示。まだ送っていない）
+$("photoFiles").onchange = () => {
+  $("photoPreview").innerHTML = [...$("photoFiles").files]
+    .map(f => `<div class="tile"><img src="${URL.createObjectURL(f)}" alt=""></div>`).join("");
+  $("photoStatus").textContent = "";
+};
+
+$("photoBtn").onclick = async () => {
+  const st = $("photoStatus"), files = [...$("photoFiles").files];
+  if (!current) { st.innerHTML = `<span class="error">先にフォルダを作ってね</span>`; return; }
+  if (!files.length) { st.textContent = "写真を選んでね"; return; }
+  $("photoBtn").disabled = true;
+  try {
+    for (const [i, f] of files.entries()) {
+      st.textContent = `アップロード中…（${i + 1}/${files.length}）`;
+      const key = await upload("content", await toJpeg(f));
+      await api(`/capsules/${current.capsule_id}/contents`, { method: "POST", body: JSON.stringify({ type: "photo", s3_key: key }) });
+    }
+    st.textContent = `${files.length}枚入れました。ロックを解除すると見られます`;
+    $("photoFiles").value = ""; $("photoPreview").innerHTML = "";
+    await loadCapsule(current.capsule_id);
+  } catch (e) { st.innerHTML = `<span class="error">${e.message}</span>`; }
+  finally { $("photoBtn").disabled = false; }
 };
 
 $("camBtn").onclick = startCamera;
@@ -371,18 +407,21 @@ function showResult(res) {
   $("resultMsg").textContent = r.message;
   $("resultMsg").style.color = r.ok ? "var(--ok)" : "var(--ink)";
   $("gauge").style.width = r.score + "%";
-  $("resultSub").textContent = `一致度 ${r.score} ／ 検出 ${r.detected_people}人（当時 ${r.expected_people}人）／ 残り ${res.attempts_left}回`;
+  $("resultSub").textContent = `一致度 ${r.score} ／ 検出 ${r.detected_people}人（当時 ${r.expected_people}人）／ ${res.attempts_left === null ? "回数制限なし" : "残り " + res.attempts_left + "回"}`;
+  // 点ごとのずれ（肩幅に対する%）。緑はそろっている、赤はずれている、灰は隠れている
   $("people").innerHTML = r.people.map(p => `
-    <div class="status">左から${p.position + 1}人目：平均ずれ ${p.mean_diff_deg ?? "-"}°${
-      p.missing_joints.length ? `（写っていない：${p.missing_joints.map(j => JOINT_JA[j]).join("・")}）` : ""}</div>
-    <div class="joints">${Object.entries(p.joints).map(([k, j]) =>
-      `<span class="chip ${j.ok ? "ok" : "ng"}">${JOINT_JA[k]} ${j.diff_deg}°</span>`).join("")}</div>`).join("");
+    <div class="status">左から${p.position + 1}人目：平均ずれ ${p.mean_point_diff === null ? "-" : Math.round(p.mean_point_diff * 100) + "%"}（肩幅に対して）</div>
+    <div class="joints">${Object.entries(p.points).map(([k, d]) =>
+      `<span class="chip ${d.ok ? "ok" : "ng"}">${POINT_JA[k]} ${Math.round(d.diff * 100)}%</span>`).join("")}${
+      p.missing_joints.map(k => `<span class="chip" style="background:#999">${POINT_JA[k] || k} 見えない</span>`).join("")}</div>`).join("");
   if (res.ok) {
     const o = res.opened;
     $("thenImg").src = o.key_photo_url; $("nowImg").src = o.attempt_photo_url;
     $("openedSec").classList.remove("hidden");
     unlockToken = res.unlock.token;
-    $("unlockInfo").textContent = `ロック解除中（${new Date(res.unlock.expires_at).toLocaleTimeString()} まで）`;
+    $("unlockInfo").textContent = res.unlock.expires_at
+      ? `ロック解除中（${new Date(res.unlock.expires_at).toLocaleTimeString()} まで）`
+      : "ロック解除中（期限なし：テスト用の設定）";
     renderLibrary(o.contents);
     $("librarySec").classList.remove("hidden");
     $("openedSec").scrollIntoView({ behavior: "smooth" });

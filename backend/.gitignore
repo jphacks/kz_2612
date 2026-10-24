@@ -2,5 +2,6 @@
 __pycache__/
 .pytest_cache/
 models/*.task
+models/*.onnx
 tests/images/
 .local_data/
