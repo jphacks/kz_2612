@@ -34,3 +34,42 @@
 #### ハッカソンで開発した独自機能・技術
 * 独自で開発したものの内容をこちらに記載してください
 * 特に力を入れた部分をファイルリンク、またはcommit_idを記載してください。
+
+## フロントエンド開発
+
+スマートフォン向けのReact + TypeScript + Viteアプリです。現在はモックデータで主要画面と画面遷移を確認できます。
+
+### 必要環境
+
+- Node.js 20以上
+- pnpm 11以上
+
+### 起動
+
+~~~bash
+pnpm install
+pnpm dev
+~~~
+
+表示されたURLをブラウザで開いてください。最初はログイン画面が表示されます。
+
+### 確認コマンド
+
+~~~bash
+pnpm build
+pnpm lint
+pnpm test
+~~~
+
+### 主な画面
+
+- /login：ログイン
+- /folders：参加中フォルダ一覧
+- /folders/new：フォルダ作成フロー
+- /folders/summer-2026/unlock：写真認証の開始
+- /folders/summer-2026/camera：写真認証カメラ
+- /folders/summer-2026/photos：写真一覧
+- /folders/summer-2026/upload：写真アップロード
+- /folders/summer-2026/settings：フォルダ情報・削除
+
+現時点ではGoogleログイン、API通信、実カメラ、MediaPipe、画像アップロードはモックです。各機能は後続の機能ブランチで接続します。
