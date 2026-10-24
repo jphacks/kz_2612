@@ -183,7 +183,9 @@ export function CreateFolderPage() {
       const normalized = await normalizeImage(keyPhoto)
       const s3Key = await uploadImage(normalized, 'key')
       const created = await createCapsule(folderName.trim(), s3Key)
-      navigate('/folders/' + created.capsule_id + '/unlock', { replace: true })
+      navigate('/folders/' + created.capsule_id + '/invite-members', {
+        replace: true,
+      })
     } catch (reason) {
       setError(errorMessage(reason))
     } finally {
@@ -241,7 +243,7 @@ export function CreateFolderPage() {
             </label>
 
             <div className="notice-box">
-              作成したアカウントは自動で参加者になります。メンバー招待はMVPには含めません。
+              作成したアカウントは自動で参加者になります。作成後に招待リンクを共有できます。
             </div>
           </div>
         )}
@@ -330,7 +332,7 @@ export function CreateFolderPage() {
               </div>
             </Card>
             <div className="notice-box">
-              作成後は、フォルダ名と鍵写真を変更できません。
+              作成後はフォルダ名と鍵写真を変更できません。続けて参加者を招待します。
             </div>
           </div>
         )}

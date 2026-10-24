@@ -3,18 +3,18 @@ import type {
   CapsuleDetail,
   CapsuleSummary,
   ContentView,
+  InviteCreated,
+  InvitePreview,
   MemberView,
   OpenedContents,
   OpenResponse,
   UploadTicket,
 } from './types'
+import { getDevelopmentIdentity } from '../lib/developmentIdentity'
 
 export const API_BASE_URL = (
   import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 ).replace(/\/$/, '')
-
-const USER_ID = import.meta.env.VITE_DEMO_USER_ID || 'demo-user'
-const USER_EMAIL = import.meta.env.VITE_DEMO_USER_EMAIL || 'demo@example.com'
 
 export class ApiError extends Error {
   status: number
@@ -30,8 +30,9 @@ export class ApiError extends Error {
 
 function apiHeaders(extra?: HeadersInit) {
   const headers = new Headers(extra)
-  headers.set('X-User-Id', USER_ID)
-  headers.set('X-User-Email', USER_EMAIL)
+  const identity = getDevelopmentIdentity()
+  headers.set('X-User-Id', identity.userId)
+  headers.set('X-User-Email', identity.email)
   return headers
 }
 
@@ -163,5 +164,23 @@ export function deleteContent(capsuleId: string, contentId: string, token: strin
 export function listMembers(capsuleId: string) {
   return request<MemberView[]>(
     '/capsules/' + encodeURIComponent(capsuleId) + '/members',
+  )
+}
+
+export function createInvite(capsuleId: string) {
+  return request<InviteCreated>(
+    '/capsules/' + encodeURIComponent(capsuleId) + '/invites',
+    { method: 'POST' },
+  )
+}
+
+export function getInvite(token: string) {
+  return request<InvitePreview>('/invites/' + encodeURIComponent(token))
+}
+
+export function acceptInvite(token: string) {
+  return request<CapsuleSummary>(
+    '/invites/' + encodeURIComponent(token) + '/accept',
+    { method: 'POST' },
   )
 }

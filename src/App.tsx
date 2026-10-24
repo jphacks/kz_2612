@@ -15,6 +15,7 @@ import {
   UploadPage,
 } from './pages/GalleryPages'
 import { NotFoundPage } from './pages/NotFoundPage'
+import { InviteAcceptPage, InviteMembersPage } from './pages/InvitePages'
 
 export function App() {
   return (
@@ -23,6 +24,11 @@ export function App() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/folders" element={<FolderListPage />} />
       <Route path="/folders/new" element={<CreateFolderPage />} />
+      <Route
+        path="/folders/:folderId/invite-members"
+        element={<InviteMembersPage />}
+      />
+      <Route path="/invite/:token" element={<InviteAcceptPage />} />
       <Route path="/folders/:folderId/unlock" element={<UnlockPage />} />
       <Route
         path="/folders/:folderId/camera-permission"

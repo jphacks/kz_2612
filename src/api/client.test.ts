@@ -1,5 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { API_BASE_URL, getContents, listCapsules } from './client'
+import {
+  acceptInvite,
+  API_BASE_URL,
+  createInvite,
+  getContents,
+  getInvite,
+  listCapsules,
+} from './client'
+import { setDevelopmentIdentity } from '../lib/developmentIdentity'
 
 function jsonResponse(value: unknown) {
   return {
@@ -12,6 +20,20 @@ function jsonResponse(value: unknown) {
 describe('API client', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
+    localStorage.clear()
+  })
+
+  it('uses the development account selected on the login screen', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse([]))
+    vi.stubGlobal('fetch', fetchMock)
+    setDevelopmentIdentity('friend@example.com')
+
+    await listCapsules()
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    const headers = new Headers(init.headers)
+    expect(headers.get('X-User-Id')).toBe('dev:friend@example.com')
+    expect(headers.get('X-User-Email')).toBe('friend@example.com')
   })
 
   it('loads the current user capsules with development identity headers', async () => {
@@ -41,5 +63,25 @@ describe('API client', () => {
 
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
     expect(new Headers(init.headers).get('X-Unlock-Token')).toBe('unlock-token')
+  })
+
+  it('calls the invitation creation, preview, and acceptance endpoints', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ token: 'invite-token', expires_at: '2026-11-01' }))
+      .mockResolvedValueOnce(jsonResponse({ capsule_id: 'capsule-1' }))
+      .mockResolvedValueOnce(jsonResponse({ capsule_id: 'capsule-1' }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await createInvite('capsule-1')
+    await getInvite('invite-token')
+    await acceptInvite('invite-token')
+
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      API_BASE_URL + '/capsules/capsule-1/invites',
+      API_BASE_URL + '/invites/invite-token',
+      API_BASE_URL + '/invites/invite-token/accept',
+    ])
+    expect((fetchMock.mock.calls[0][1] as RequestInit).method).toBe('POST')
+    expect((fetchMock.mock.calls[2][1] as RequestInit).method).toBe('POST')
   })
 })

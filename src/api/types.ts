@@ -97,6 +97,23 @@ export interface MemberView {
   email: string | null
 }
 
+export interface InviteCreated {
+  token: string
+  expires_at: string
+}
+
+export interface InvitePreview {
+  capsule_id: string
+  capsule_name: string
+  open_date: string | null
+  days_until_open: number | null
+  people_count: number
+  members_count: number
+  invited_by: string
+  expires_at: string
+  already_member: boolean
+}
+
 export interface ApiErrorPayload {
   error?: {
     code?: string

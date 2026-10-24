@@ -1,7 +1,13 @@
 import { Camera, Images, Sparkles } from 'lucide-react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AppShell } from '../components/AppShell'
 import { Button } from '../components/Ui'
+import {
+  defaultDevelopmentEmail,
+  getDevelopmentIdentity,
+  setDevelopmentIdentity,
+} from '../lib/developmentIdentity'
 
 function GoogleMark() {
   return (
@@ -13,6 +19,15 @@ function GoogleMark() {
 
 export function LoginPage() {
   const navigate = useNavigate()
+  const [email, setEmail] = useState(
+    getDevelopmentIdentity().email || defaultDevelopmentEmail,
+  )
+
+  const continueWithDevelopmentAccount = () => {
+    if (!email.trim()) return
+    setDevelopmentIdentity(email)
+    navigate('/folders')
+  }
 
   return (
     <AppShell>
@@ -52,7 +67,21 @@ export function LoginPage() {
         </div>
 
         <div className="login-actions">
-          <Button fullWidth variant="secondary" onClick={() => navigate('/folders')}>
+          <label className="development-account-field">
+            <span>開発用メールアドレス</span>
+            <input
+              type="email"
+              value={email}
+              placeholder="you@example.com"
+              onChange={(event) => setEmail(event.target.value)}
+            />
+          </label>
+          <Button
+            fullWidth
+            variant="secondary"
+            disabled={!email.trim()}
+            onClick={continueWithDevelopmentAccount}
+          >
             <GoogleMark />
             開発用アカウントで進む
           </Button>

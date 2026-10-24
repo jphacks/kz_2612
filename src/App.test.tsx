@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { App } from './App'
@@ -39,6 +39,7 @@ describe('App routes', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
     sessionStorage.clear()
+    localStorage.clear()
   })
 
   it('shows the login screen', () => {
@@ -124,5 +125,80 @@ describe('App routes', () => {
     expect(screen.getByText('顔が一致しました')).toBeInTheDocument()
     expect(screen.getByText('左から2人目')).toBeInTheDocument()
     expect(screen.getByText('顔が一致しません')).toBeInTheDocument()
+  })
+
+  it('lets an invited account join a folder', async () => {
+    const fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      if (url.endsWith('/invites/invite-token/accept') && init?.method === 'POST') {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            capsule_id: 'capsule-1',
+            name: '夏合宿',
+            role: 'member',
+          }),
+        })
+      }
+      if (url.endsWith('/capsules/capsule-1')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            capsule_id: 'capsule-1',
+            name: '夏合宿',
+            open_date: null,
+            days_until_open: null,
+            status: 'locked',
+            people_count: 3,
+            role: 'member',
+            key_photo_url: 'key.jpg',
+            preview_url: null,
+            url_expires_in: 60,
+            guide: [],
+            can_open_now: true,
+            locked_until: null,
+            attempts_left: null,
+            contents_count: 0,
+            opened_at: null,
+          }),
+        })
+      }
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          capsule_id: 'capsule-1',
+          capsule_name: '夏合宿',
+          open_date: null,
+          days_until_open: null,
+          people_count: 3,
+          members_count: 1,
+          invited_by: 'demo-user',
+          expires_at: '2026-11-01T00:00:00Z',
+          already_member: false,
+        }),
+      })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(
+      <MemoryRouter initialEntries={['/invite/invite-token']}>
+        <App />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByRole('heading', { name: '夏合宿' })).toBeInTheDocument()
+    expect(screen.getByText(/鍵写真の人物と参加アカウントを照合/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '招待を承認して参加' }))
+
+    await waitFor(() => {
+      const acceptance = fetchMock.mock.calls.find(
+        ([url, init]) =>
+          String(url).endsWith('/invites/invite-token/accept') &&
+          (init as RequestInit | undefined)?.method === 'POST',
+      )
+      expect(acceptance).toBeDefined()
+    })
   })
 })
