@@ -8,8 +8,13 @@
 | OpenRecord   | CAPSULE#{id}    | OPEN#{openedAt}             |               |                  |
 | Invite       | INVITE#{token}  | META                        |               |                  |
 | UnlockSession| SESSION#{token} | META                        |               |                  |
+| InviteRef    | CAPSULE#{id}    | INVITE#{token}              |               |                  |
+| SessionRef   | CAPSULE#{id}    | SESSION#{token}             |               |                  |
+| AttemptRef   | CAPSULE#{id}    | ATTEMPT#{at}#{n}            |               |                  |
 
 UnlockSession の ttl（UNIX秒）は DynamoDB の TTL を有効にすると自動で消える（任意）。
+*Ref はフォルダを削除するときに、別のパーティションにある招待・解除セッションと、
+開けられなかったときの撮影画像を漏れなく消すための目印。
 
 ItemStore が「アイテムの読み書き」だけを担当し、Repository はその上で共通に動く。
 ローカルでは JSON ファイル、AWS では DynamoDB の ItemStore を使う。
@@ -96,6 +101,9 @@ class DynamoItemStore:
     def query(self, pk: str, sk_prefix: str) -> list[dict]:
         from boto3.dynamodb.conditions import Key
 
+        if not sk_prefix:
+            # SK の条件に空文字は使えないので、パーティションの全件を取る
+            return self._query_all(KeyConditionExpression=Key("PK").eq(pk))
         return self._query_all(KeyConditionExpression=Key("PK").eq(pk) & Key("SK").begins_with(sk_prefix))
 
     def query_gsi1(self, gsi1pk: str) -> list[dict]:
@@ -219,6 +227,8 @@ class Repository:
     # Invite（招待リンク）。トークンだけで引けるよう、カプセルとは別のパーティションに置く
     def create_invite(self, invite: dict) -> None:
         self.store.put({"PK": f"INVITE#{invite['token']}", "SK": "META", "entity": "Invite", **invite})
+        self.store.put({"PK": f"CAPSULE#{invite['capsule_id']}", "SK": f"INVITE#{invite['token']}",
+                        "entity": "InviteRef", "token": invite["token"]})
 
     def get_invite(self, token: str) -> dict | None:
         return _strip(self.store.get(f"INVITE#{token}", "META"))
@@ -226,6 +236,33 @@ class Repository:
     # UnlockSession（ポーズで解除してからライブラリを使える間の合言葉）
     def create_unlock_session(self, session: dict) -> None:
         self.store.put({"PK": f"SESSION#{session['token']}", "SK": "META", "entity": "UnlockSession", **session})
+        ref = {"PK": f"CAPSULE#{session['capsule_id']}", "SK": f"SESSION#{session['token']}",
+               "entity": "SessionRef", "token": session["token"]}
+        if session.get("ttl"):
+            ref["ttl"] = session["ttl"]
+        self.store.put(ref)
 
     def get_unlock_session(self, token: str) -> dict | None:
         return _strip(self.store.get(f"SESSION#{token}", "META"))
+
+    # AttemptRef（開けられなかったときの撮影画像。成功した撮影は OpenRecord に残る）
+    def add_attempt_ref(self, capsule_id: str, s3_key: str, at: str) -> None:
+        self.store.put({"PK": f"CAPSULE#{capsule_id}", "SK": f"ATTEMPT#{at}#{s3_key.rsplit('/', 1)[-1]}",
+                        "entity": "AttemptRef", "capsule_id": capsule_id, "s3_key": s3_key, "at": at})
+
+    # フォルダの削除
+    def delete_capsule(self, capsule_id: str) -> list[dict]:
+        """フォルダに関するアイテムをすべて消す（メンバー・中身・開封記録・撮影の記録・招待・解除セッション）。
+
+        消したアイテムを返すので、呼び出し側でそこに書かれた画像（S3）も消す。
+        """
+        pk = f"CAPSULE#{capsule_id}"
+        items = self.store.query(pk, "")
+        for item in items:
+            # 別のパーティションにある本体（招待・解除セッション）も消す
+            if item.get("entity") == "InviteRef":
+                self.store.delete(f"INVITE#{item['token']}", "META")
+            elif item.get("entity") == "SessionRef":
+                self.store.delete(f"SESSION#{item['token']}", "META")
+            self.store.delete(item["PK"], item["SK"])
+        return items

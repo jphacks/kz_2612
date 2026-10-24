@@ -57,6 +57,7 @@ await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
 | GET | `/capsules/{id}/contents` | ライブラリ（写真一覧）🔓 | 写真ライブラリ画面・1枚写真画面 |
 | POST | `/capsules/{id}/contents` | 写真（メッセージ）を追加 | 追加 → アップロード |
 | DELETE | `/capsules/{id}/contents/{content_id}` | 写真を削除 🔓 | 選択 → 削除 |
+| DELETE | `/capsules/{id}` | フォルダを削除（参加者なら誰でも） | （フローには未記載） |
 | GET | `/capsules/{id}/album` | 認証アルバム（解除した瞬間の写真）🔓 | （フローには未記載） |
 | POST | `/capsules/{id}/invites` | 招待リンクを発行（作成者のみ） | 作成登録画面（参加アカウント） |
 | GET | `/invites/{token}` | 招待の中身を確認（参加前） | 招待ページ |
@@ -283,7 +284,7 @@ await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
 形は `opened` と同じ（`key_photo_url`・`attempt_photo_url`（直近の解除写真）・`contents`・`url_expires_in`）。
 
 - **写真の URL は60秒で失効する。** 1枚表示で左右にスライドするときなど、表示できなくなったら（`<img>` の `onerror`）このAPIを呼び直して URL を取り直す。解除中なら何度呼んでもよい
-- `contents` は追加した順。`author_id` が自分か、自分が作成者（`role: "owner"`）なら削除ボタンを出す
+- `contents` は追加した順。削除ボタンは全員に出してよい（参加者なら誰の写真でも消せる）
 
 | エラー | code | 意味 |
 | --- | --- | --- |
@@ -294,13 +295,34 @@ await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
 
 204（本文なし）。画像ファイルも消える。複数選んで消すときは1枚ずつ呼ぶ。
 
-- 消せるのは**追加した本人か、フォルダの作成者**
+- フォルダの**参加者なら誰でも**、誰が追加した写真でも消せる（共有フォルダのため）
 
 | エラー | code | 意味 |
 | --- | --- | --- |
-| 403 | `not_author` | 他の人が追加した写真 |
+| 403 | `not_member` | フォルダの参加者ではない |
 | 404 | `content_not_found` | もう消えている |
 | 401 | `unlock_required` / `unlock_expired` | 解除していない・期限切れ |
+
+#### DELETE /capsules/{id} — フォルダを削除
+
+204（本文なし）。**フォルダの参加者なら誰でも**消せる（作成者でなくてもよい）。ポーズでの解除は不要（メンバーが揃わなくても消せるように）。
+
+消えるもの（元に戻せない。メンバー全員から見えなくなる）:
+
+| 種類 | 中身 |
+| --- | --- |
+| 鍵 | 鍵の写真、骨格プレビュー、鍵のポーズ、顔の記憶 |
+| 中身 | 入れた写真・メッセージ |
+| 認証まわり | 開封記録（認証アルバム）、開けたとき・開けられなかったときの撮影画像、解除セッション |
+| 参加 | メンバー、招待リンク |
+
+- 消したあとは、そのフォルダの API はすべて 404 `capsule_not_found`、招待リンクも 404 になる
+- 誰でも消せるので、画面では「元に戻せない」ことを伝える確認ダイアログを出してください
+
+| エラー | code | 意味 |
+| --- | --- | --- |
+| 403 | `not_member` | フォルダの参加者ではない |
+| 404 | `capsule_not_found` | もう消えている |
 
 #### GET /capsules/{id}/album — 認証アルバム 🔓
 
@@ -380,7 +402,7 @@ await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
 | --- | --- |
 | 400 | `invalid_s3_key` `invalid_image` `text_required` `s3_key_required` |
 | 401 | `unlock_required` `unlock_expired` |
-| 403 | `not_member` `not_owner` `not_author` |
+| 403 | `not_member` `not_owner` |
 | 404 | `capsule_not_found` `upload_not_found` `invite_not_found` `content_not_found` |
 | 409 | `not_open_yet` |
 | 410 | `invite_expired` |
@@ -472,6 +494,11 @@ docker run --rm -p 9000:8080 -e EMO_BUCKET=... -e EMO_TABLE=... -e AWS_REGION=ap
 | OpenRecord | `CAPSULE#{id}` | `OPEN#{openedAt}` | | |
 | Invite | `INVITE#{token}` | `META` | | |
 | UnlockSession | `SESSION#{token}` | `META` | | |
+| InviteRef | `CAPSULE#{id}` | `INVITE#{token}` | | |
+| SessionRef | `CAPSULE#{id}` | `SESSION#{token}` | | |
+| AttemptRef | `CAPSULE#{id}` | `ATTEMPT#{at}#{file}` | | |
+
+`*Ref` はフォルダを削除するときの目印（別のパーティションにある招待・解除セッションと、開けられなかったときの撮影画像を漏れなく消すため）。
 
 任意：テーブルの TTL を属性 `ttl` で有効にすると、期限切れの UnlockSession が自動で消える（有効にしなくても動く）。
 
