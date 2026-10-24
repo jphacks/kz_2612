@@ -1,6 +1,6 @@
 import { Camera, Images, Sparkles } from 'lucide-react'
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { AppShell } from '../components/AppShell'
 import { Button } from '../components/Ui'
 import {
@@ -8,6 +8,11 @@ import {
   getDevelopmentIdentity,
   setDevelopmentIdentity,
 } from '../lib/developmentIdentity'
+import {
+  beginGoogleSignIn,
+  getSignedInUser,
+  isCognitoConfigured,
+} from '../lib/auth'
 
 function GoogleMark() {
   return (
@@ -19,6 +24,9 @@ function GoogleMark() {
 
 export function LoginPage() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const [signingIn, setSigningIn] = useState(false)
+  const [error, setError] = useState('')
   const [email, setEmail] = useState(
     getDevelopmentIdentity().email || defaultDevelopmentEmail,
   )
@@ -27,6 +35,25 @@ export function LoginPage() {
     if (!email.trim()) return
     setDevelopmentIdentity(email)
     navigate('/folders')
+  }
+
+  const returnTo =
+    new URLSearchParams(location.search).get('returnTo') || '/folders'
+
+  const continueWithGoogle = async () => {
+    const signedIn = getSignedInUser()
+    if (signedIn) {
+      navigate(returnTo, { replace: true })
+      return
+    }
+    setSigningIn(true)
+    setError('')
+    try {
+      await beginGoogleSignIn(returnTo)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'ログインに失敗しました。')
+      setSigningIn(false)
+    }
   }
 
   return (
@@ -67,7 +94,7 @@ export function LoginPage() {
         </div>
 
         <div className="login-actions">
-          <label className="development-account-field">
+          {!isCognitoConfigured && <label className="development-account-field">
             <span>開発用メールアドレス</span>
             <input
               type="email"
@@ -75,17 +102,27 @@ export function LoginPage() {
               placeholder="you@example.com"
               onChange={(event) => setEmail(event.target.value)}
             />
-          </label>
+          </label>}
           <Button
             fullWidth
             variant="secondary"
-            disabled={!email.trim()}
-            onClick={continueWithDevelopmentAccount}
+            loading={signingIn}
+            disabled={!isCognitoConfigured && !email.trim()}
+            onClick={
+              isCognitoConfigured
+                ? continueWithGoogle
+                : continueWithDevelopmentAccount
+            }
           >
             <GoogleMark />
-            開発用アカウントで進む
+            {isCognitoConfigured ? 'Googleで続ける' : '開発用アカウントで進む'}
           </Button>
-          <small className="development-note">Googleログインはバックエンド実装待ちです</small>
+          {!isCognitoConfigured && (
+            <small className="development-note">
+              Cognito未設定のため開発用アカウントを使用します
+            </small>
+          )}
+          {error && <div className="api-error" role="alert">{error}</div>}
           <p>ログインすると利用規約とプライバシーポリシーに同意したことになります</p>
         </div>
 

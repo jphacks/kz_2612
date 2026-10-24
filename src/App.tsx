@@ -16,37 +16,44 @@ import {
 } from './pages/GalleryPages'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { InviteAcceptPage, InviteMembersPage } from './pages/InvitePages'
+import {
+  AuthCallbackPage,
+  RequireAccount,
+} from './pages/AuthAccountPages'
 
 export function App() {
   return (
     <Routes>
       <Route path="/" element={<Navigate to="/login" replace />} />
       <Route path="/login" element={<LoginPage />} />
-      <Route path="/folders" element={<FolderListPage />} />
-      <Route path="/folders/new" element={<CreateFolderPage />} />
-      <Route
-        path="/folders/:folderId/invite-members"
-        element={<InviteMembersPage />}
-      />
+      <Route path="/auth/callback" element={<AuthCallbackPage />} />
       <Route path="/invite/:token" element={<InviteAcceptPage />} />
-      <Route path="/folders/:folderId/unlock" element={<UnlockPage />} />
-      <Route
-        path="/folders/:folderId/camera-permission"
-        element={<CameraPermissionPage />}
-      />
-      <Route path="/folders/:folderId/camera" element={<CameraPage />} />
-      <Route path="/folders/:folderId/verifying" element={<VerifyingPage />} />
-      <Route path="/folders/:folderId/auth-result" element={<ResultPage />} />
-      <Route path="/folders/:folderId/photos" element={<GalleryPage />} />
-      <Route
-        path="/folders/:folderId/photos/:photoId"
-        element={<PhotoDetailPage />}
-      />
-      <Route path="/folders/:folderId/upload" element={<UploadPage />} />
-      <Route
-        path="/folders/:folderId/settings"
-        element={<FolderSettingsPage />}
-      />
+      <Route element={<RequireAccount />}>
+        <Route path="/folders" element={<FolderListPage />} />
+        <Route path="/folders/new" element={<CreateFolderPage />} />
+        <Route
+          path="/folders/:folderId/invite-members"
+          element={<InviteMembersPage />}
+        />
+        <Route path="/folders/:folderId/unlock" element={<UnlockPage />} />
+        <Route
+          path="/folders/:folderId/camera-permission"
+          element={<CameraPermissionPage />}
+        />
+        <Route path="/folders/:folderId/camera" element={<CameraPage />} />
+        <Route path="/folders/:folderId/verifying" element={<VerifyingPage />} />
+        <Route path="/folders/:folderId/auth-result" element={<ResultPage />} />
+        <Route path="/folders/:folderId/photos" element={<GalleryPage />} />
+        <Route
+          path="/folders/:folderId/photos/:photoId"
+          element={<PhotoDetailPage />}
+        />
+        <Route path="/folders/:folderId/upload" element={<UploadPage />} />
+        <Route
+          path="/folders/:folderId/settings"
+          element={<FolderSettingsPage />}
+        />
+      </Route>
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
   )

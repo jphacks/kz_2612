@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Check,
   Copy,
@@ -10,7 +10,7 @@ import {
   UserPlus,
   Users,
 } from 'lucide-react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import {
   acceptInvite,
   createInvite,
@@ -24,6 +24,11 @@ import {
   getDevelopmentIdentity,
   setDevelopmentIdentity,
 } from '../lib/developmentIdentity'
+import {
+  beginGoogleSignIn,
+  getSignedInUser,
+  isCognitoConfigured,
+} from '../lib/auth'
 
 function errorMessage(error: unknown) {
   return error instanceof Error
@@ -210,12 +215,15 @@ export function InviteMembersPage() {
 
 export function InviteAcceptPage() {
   const { token = '' } = useParams()
+  const location = useLocation()
   const navigate = useNavigate()
   const [preview, setPreview] = useState<InvitePreview | null>(null)
   const [loading, setLoading] = useState(true)
   const [joining, setJoining] = useState(false)
   const [error, setError] = useState('')
   const [email, setEmail] = useState(getDevelopmentIdentity().email)
+  const autoJoinStarted = useRef(false)
+  const signedInUser = getSignedInUser()
 
   const loadPreview = useCallback(() => {
     if (!token) return
@@ -237,7 +245,7 @@ export function InviteAcceptPage() {
     loadPreview()
   }
 
-  const join = async () => {
+  const join = useCallback(async () => {
     setJoining(true)
     setError('')
     try {
@@ -248,7 +256,36 @@ export function InviteAcceptPage() {
     } finally {
       setJoining(false)
     }
+  }, [navigate, token])
+
+  const joinOrSignIn = async () => {
+    if (isCognitoConfigured && !signedInUser) {
+      setJoining(true)
+      setError('')
+      try {
+        await beginGoogleSignIn('/invite/' + token + '?join=1')
+      } catch (reason) {
+        setError(errorMessage(reason))
+        setJoining(false)
+      }
+      return
+    }
+    await join()
   }
+
+  useEffect(() => {
+    const shouldJoin = new URLSearchParams(location.search).get('join') === '1'
+    if (
+      shouldJoin &&
+      signedInUser &&
+      preview &&
+      !preview.already_member &&
+      !autoJoinStarted.current
+    ) {
+      autoJoinStarted.current = true
+      void join()
+    }
+  }, [join, location.search, preview, signedInUser])
 
   return (
     <AppShell>
@@ -286,7 +323,7 @@ export function InviteAcceptPage() {
               <span><Users size={16} />現在 {preview.members_count}人が参加中</span>
             </div>
 
-            <Card className="development-account-card">
+            {!isCognitoConfigured && <Card className="development-account-card">
               <div>
                 <LogIn size={19} />
                 <strong>参加する開発用アカウント</strong>
@@ -301,7 +338,17 @@ export function InviteAcceptPage() {
                 このアカウントに切り替える
               </button>
               <small>Googleログイン実装後は、この入力欄をログイン画面に置き換えます。</small>
-            </Card>
+            </Card>}
+
+            {isCognitoConfigured && signedInUser && (
+              <Card className="signed-in-account">
+                <Check size={19} />
+                <div>
+                  <strong>Googleでログイン済み</strong>
+                  <small>{signedInUser.email || signedInUser.userId}</small>
+                </div>
+              </Card>
+            )}
 
             <div className="notice-box">
               参加すると、自分のフォルダ一覧にこのフォルダが表示されます。
@@ -316,9 +363,13 @@ export function InviteAcceptPage() {
                 loading={joining}
                 onClick={preview.already_member
                   ? () => navigate('/folders/' + preview.capsule_id + '/unlock')
-                  : join}
+                  : joinOrSignIn}
               >
-                {preview.already_member ? 'フォルダを開く' : '招待を承認して参加'}
+                {preview.already_member
+                  ? 'フォルダを開く'
+                  : isCognitoConfigured && !signedInUser
+                    ? 'Googleで参加する'
+                    : '招待を承認して参加'}
               </Button>
               <Button fullWidth variant="ghost" onClick={() => navigate('/folders')}>
                 あとで

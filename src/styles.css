@@ -2849,6 +2849,69 @@ p {
   margin-top: 22px;
 }
 
+.signed-in-account {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin-bottom: 15px;
+  padding: 14px 16px;
+  color: var(--green);
+}
+
+.signed-in-account div {
+  min-width: 0;
+}
+
+.signed-in-account strong,
+.signed-in-account small {
+  display: block;
+}
+
+.signed-in-account strong {
+  color: var(--ink);
+  font-size: 11px;
+}
+
+.signed-in-account small {
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.auth-callback {
+  display: grid;
+  min-height: 100dvh;
+  align-content: center;
+  justify-items: center;
+  padding: 32px;
+  text-align: center;
+}
+
+.auth-callback h1 {
+  margin: 16px 0 7px;
+  font-size: 20px;
+}
+
+.auth-callback p {
+  max-width: 290px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.65;
+}
+
+.auth-callback button {
+  margin-top: 18px;
+  padding: 12px 18px;
+  border-radius: 14px;
+  color: #fff;
+  background: var(--accent);
+  font-size: 11px;
+  font-weight: 800;
+}
+
 .modal-backdrop {
   position: absolute;
   z-index: 50;

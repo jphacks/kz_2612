@@ -2,6 +2,7 @@
   "Variables": {
     "EMO_BUCKET": "emo-capsule-fukushima-1024",
     "EMO_TABLE": "emo-timecapsule",
+    "EMO_AUTH_MODE": "development",
     "EMO_CORS_ORIGINS": "http://localhost:5173",
     "EMO_IGNORE_OPEN_DATE": "true"
   }

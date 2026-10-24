@@ -11,6 +11,7 @@ import type {
   UploadTicket,
 } from './types'
 import { getDevelopmentIdentity } from '../lib/developmentIdentity'
+import { getBearerToken, isCognitoConfigured } from '../lib/auth'
 
 export const API_BASE_URL = (
   import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
@@ -28,8 +29,13 @@ export class ApiError extends Error {
   }
 }
 
-function apiHeaders(extra?: HeadersInit) {
+async function apiHeaders(extra?: HeadersInit) {
   const headers = new Headers(extra)
+  if (isCognitoConfigured) {
+    const token = await getBearerToken()
+    if (token) headers.set('Authorization', 'Bearer ' + token)
+    return headers
+  }
   const identity = getDevelopmentIdentity()
   headers.set('X-User-Id', identity.userId)
   headers.set('X-User-Email', identity.email)
@@ -42,7 +48,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   try {
     response = await fetch(API_BASE_URL + path, {
       ...init,
-      headers: apiHeaders(init.headers),
+      headers: await apiHeaders(init.headers),
     })
   } catch {
     throw new ApiError(

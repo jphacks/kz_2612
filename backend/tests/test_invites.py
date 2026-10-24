@@ -120,3 +120,22 @@ def test_expires_at_is_in_the_future_by_default(env):
     expires = dt.datetime.fromisoformat(invite(client, cid).json()["expires_at"])
     days = (expires - dt.datetime.now(dt.timezone.utc)).days
     assert 13 <= days <= 14
+
+
+def test_invite_preview_is_public_but_accept_requires_login_in_cognito_mode(env):
+    client, _, settings = env
+    cid = create(client).json()["capsule_id"]
+    token = invite(client, cid).json()["token"]
+    app.dependency_overrides[deps.settings_dep] = lambda: replace(
+        settings,
+        auth_mode="cognito",
+    )
+
+    preview = client.get(f"/invites/{token}")
+    assert preview.status_code == 200
+    assert preview.json()["capsule_name"] == "成人式"
+    assert preview.json()["already_member"] is False
+
+    accepted = client.post(f"/invites/{token}/accept")
+    assert accepted.status_code == 401
+    assert accepted.json()["error"]["code"] == "login_required"

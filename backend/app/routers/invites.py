@@ -13,7 +13,7 @@ import secrets
 
 from fastapi import APIRouter, Depends
 
-from app.deps import current_user, get_repository, settings_dep
+from app.deps import current_user, get_repository, optional_user, settings_dep
 from app.errors import ApiError
 from app.repository import Repository
 from app.routers.capsules import ERRORS, _days_until, _get_capsule_for_member, _now, _open_date, _parse_dt, _summary
@@ -81,7 +81,7 @@ def create_invite(
 )
 def get_invite(
     token: str,
-    user: dict = Depends(current_user),
+    user: dict | None = Depends(optional_user),
     repo: Repository = Depends(get_repository),
 ) -> InvitePreview:
     invite, capsule = _valid_invite(repo, token)
@@ -95,7 +95,10 @@ def get_invite(
         members_count=len(repo.list_members(capsule["capsule_id"])),
         invited_by=invite["created_by"],
         expires_at=invite["expires_at"],
-        already_member=repo.get_member(capsule["capsule_id"], user["user_id"]) is not None,
+        already_member=(
+            user is not None
+            and repo.get_member(capsule["capsule_id"], user["user_id"]) is not None
+        ),
     )
 
 

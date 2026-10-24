@@ -106,10 +106,10 @@ pnpm test
 
 ### 現在の接続範囲
 
-- API認証はCognito導入前のため、.env.local の VITE_DEMO_USER_ID を X-User-Id として送ります。
+- Cognito設定済みの環境ではGoogleログイン（認証コード＋PKCE）を使い、APIへJWTを送ります。未設定のローカル環境だけ開発用ユーザーを使います。
 - 写真認証は端末カメラで撮影し、RTMPoseによる最終判定APIへ送ります。
 - 撮影中はMoveNet MultiPose Lightningを実行し、最大4人の人数と骨格をガイド表示します。
 - MoveNetモデルは初回利用時に外部配信元から読み込みます。読み込みに失敗しても撮影とRTMPose判定は利用できます。
 - 解除トークンはタブの sessionStorage に保存し、更新後も最大12時間維持します。
 - 画像はブラウザでJPEGへ正規化してから、発行されたアップロードURLへ直接PUTします。
-- Googleログインとフォルダ削除は未接続です。
+- Googleログインを有効にするための環境変数とAWS設定は [infra/README.md](infra/README.md) を参照してください。フォルダ削除は未接続です。

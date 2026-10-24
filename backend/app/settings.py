@@ -26,6 +26,8 @@ class Settings:
     bucket: str = "emo-timecapsule"
     table: str = "emo-timecapsule"
     region: str = "ap-northeast-1"
+    # "development": X-User-* ヘッダーを使う / "cognito": API Gateway JWT claims を必須にする
+    auth_mode: str = "development"
 
     upload_url_expires: int = 300
     # PRD: 中身の閲覧は期限60秒の署名付きURLのみ
@@ -56,6 +58,7 @@ class Settings:
             bucket=_env("EMO_BUCKET", d.bucket),
             table=_env("EMO_TABLE", d.table),
             region=_env("AWS_REGION", d.region),
+            auth_mode=_env("EMO_AUTH_MODE", d.auth_mode),
             upload_url_expires=int(_env("EMO_UPLOAD_URL_EXPIRES", str(d.upload_url_expires))),
             view_url_expires=int(_env("EMO_VIEW_URL_EXPIRES", str(d.view_url_expires))),
             max_upload_bytes=int(_env("EMO_MAX_UPLOAD_BYTES", str(d.max_upload_bytes))),

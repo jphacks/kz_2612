@@ -6,7 +6,9 @@ import os
 from functools import lru_cache
 from pathlib import Path
 
-from fastapi import Header
+from fastapi import Depends, Header, Request
+
+from app.errors import ApiError
 
 from app.pose.base import Detector
 from app.pose.config import MatchConfig
@@ -67,13 +69,50 @@ def get_match_config() -> MatchConfig:
     return MatchConfig.from_env()
 
 
-def current_user(
+def _gateway_user(request: Request) -> dict | None:
+    event = request.scope.get("aws.event")
+    if not isinstance(event, dict):
+        return None
+    request_context = event.get("requestContext")
+    if not isinstance(request_context, dict):
+        return None
+    authorizer = request_context.get("authorizer")
+    if not isinstance(authorizer, dict):
+        return None
+    jwt = authorizer.get("jwt")
+    if not isinstance(jwt, dict):
+        return None
+    claims = jwt.get("claims")
+    if not isinstance(claims, dict) or not claims.get("sub"):
+        return None
+    return {
+        "user_id": str(claims["sub"]),
+        "email": claims.get("email"),
+    }
+
+
+def optional_user(
+    request: Request,
     x_user_id: str | None = Header(default=None),
     x_user_email: str | None = Header(default=None),
+    settings: Settings = Depends(settings_dep),
+) -> dict | None:
+    """ログイン中のユーザー。公開APIでは未ログインなら None を返す。"""
+    gateway_user = _gateway_user(request)
+    if gateway_user:
+        return gateway_user
+    if settings.auth_mode == "cognito":
+        return None
+    return {"user_id": x_user_id or DEMO_USER_ID, "email": x_user_email}
+
+
+def current_user(
+    user: dict | None = Depends(optional_user),
 ) -> dict:
     """ログイン中のユーザー。
 
-    Cognito が入るまでは X-User-Id ヘッダー（無ければ固定のデモユーザー）で代替する（PRD F-1）。
-    Cognito 導入後は API Gateway の JWT オーソライザーの claims（sub, email）に置き換える。
+    development では X-User-Id、cognito では API Gateway が検証した claims を使う。
     """
-    return {"user_id": x_user_id or DEMO_USER_ID, "email": x_user_email}
+    if user is None:
+        raise ApiError(401, "login_required", "続けるにはGoogleでログインしてね")
+    return user
