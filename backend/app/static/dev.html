@@ -44,6 +44,18 @@
   <p class="lead">ローカル確認用の簡易画面（本番のフロントではありません）。1人でも、自分が写った写真を鍵にして試せます。</p>
 
   <section>
+    <h2>あなたは誰？</h2>
+    <p class="lead" style="margin:0">ログインの代わりにユーザーIDで切り替えます。招待を試すときは、別のタブで別のIDにしてね。</p>
+    <label>ユーザーID</label>
+    <input id="userId" type="text" value="demo-user">
+    <div id="joinBox" class="hidden" style="margin-top:14px">
+      <div class="letter" id="joinInfo"></div>
+      <button id="joinBtn">このカプセルに参加する</button>
+      <div class="status" id="joinStatus"></div>
+    </div>
+  </section>
+
+  <section>
     <h2>① カプセルを作る</h2>
     <div class="row">
       <div>
@@ -78,6 +90,10 @@
     <textarea id="letter" rows="3">10年後の自分へ。元気にしてる？</textarea>
     <button id="letterBtn">メッセージを入れる</button>
     <div class="status" id="letterStatus"></div>
+    <label style="margin-top:16px">メンバー</label>
+    <div class="status" id="members" style="margin-top:0"></div>
+    <button class="secondary" id="inviteBtn">招待リンクを作る</button>
+    <div class="status" id="inviteStatus"></div>
   </section>
 
   <section>
@@ -111,8 +127,8 @@
 
 <script>
 const API = location.origin;
-const H = { "Content-Type": "application/json", "X-User-Id": "demo-user" };
 const $ = (id) => document.getElementById(id);
+const headers = () => ({ "Content-Type": "application/json", "X-User-Id": $("userId").value.trim() || "demo-user" });
 const JOINT_JA = { left_elbow:"左ひじ", right_elbow:"右ひじ", left_shoulder:"左腕", right_shoulder:"右腕", left_knee:"左ひざ", right_knee:"右ひざ" };
 const BONES = [["left_shoulder","right_shoulder"],["left_shoulder","left_elbow"],["left_elbow","left_wrist"],["right_shoulder","right_elbow"],["right_elbow","right_wrist"],["left_shoulder","left_hip"],["right_shoulder","right_hip"],["left_hip","right_hip"],["left_hip","left_knee"],["left_knee","left_ankle"],["right_hip","right_knee"],["right_knee","right_ankle"]];
 let stream = null, current = null;
@@ -120,7 +136,7 @@ let stream = null, current = null;
 $("openDate").value = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
 
 async function api(path, opts = {}) {
-  const res = await fetch(API + path, { headers: H, ...opts });
+  const res = await fetch(API + path, { headers: headers(), ...opts });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(body.error ? body.error.message : `HTTP ${res.status}`);
   return body;
@@ -171,8 +187,14 @@ async function startCamera() {
   }
 }
 
+// ユーザーIDを切り替えた後に、前のユーザーの結果が遅れて届いても画面を上書きしない
+const stale = (user) => user !== headers()["X-User-Id"];
+
 async function refreshList(selectId) {
+  const user = headers()["X-User-Id"];
   const list = await api("/capsules");
+  if (stale(user)) return;
+  if (!list.length) { current = null; $("capSelect").innerHTML = ""; $("members").textContent = "（カプセルがまだありません）"; drawGuide(); return; }
   $("capSelect").innerHTML = list.map(c =>
     `<option value="${c.capsule_id}">${c.name}（${c.people_count}人・${c.status === "opened" ? "開封済み" : "あと" + c.days_until_open + "日"}）</option>`).join("");
   if (selectId) $("capSelect").value = selectId;
@@ -180,9 +202,49 @@ async function refreshList(selectId) {
 }
 
 async function loadCapsule(id) {
-  current = await api(`/capsules/${id}`);
+  const user = headers()["X-User-Id"];
+  const detail = await api(`/capsules/${id}`);
+  const members = await api(`/capsules/${id}/members`);
+  if (stale(user)) return;
+  current = detail;
+  $("members").textContent = members.map(m => m.user_id + (m.role === "owner" ? "（作成者）" : "")).join("、");
+  $("inviteBtn").classList.toggle("hidden", current.role !== "owner");
+  $("inviteStatus").textContent = "";
   drawGuide();
 }
+
+$("userId").onchange = () => refreshList().catch(e => alert(e.message));
+
+$("inviteBtn").onclick = async () => {
+  try {
+    const inv = await api(`/capsules/${current.capsule_id}/invites`, { method: "POST" });
+    const url = `${location.origin}/dev?invite=${inv.token}`;
+    $("inviteStatus").innerHTML = `招待リンク（${new Date(inv.expires_at).toLocaleDateString()}まで）：<br><a href="${url}" target="_blank">${url}</a><br>別のタブで開いて、ユーザーIDを変えて参加してみてね`;
+  } catch (e) { $("inviteStatus").innerHTML = `<span class="error">${e.message}</span>`; }
+};
+
+const inviteToken = new URLSearchParams(location.search).get("invite");
+async function showInvite() {
+  if (!inviteToken) return;
+  $("joinBox").classList.remove("hidden");
+  const user = headers()["X-User-Id"];
+  try {
+    const p = await api(`/invites/${inviteToken}`);
+    if (stale(user)) return;
+    $("joinInfo").textContent = `${p.invited_by} さんから「${p.capsule_name}」に招待されています。\n開封日 ${p.open_date}（あと${p.days_until_open}日）・開けるときに揃う人数 ${p.people_count}人・メンバー ${p.members_count}人`;
+    $("joinBtn").disabled = p.already_member;
+    $("joinStatus").textContent = p.already_member ? "このユーザーはもうメンバーです" : "ユーザーIDを確認してから参加してね";
+  } catch (e) { $("joinInfo").textContent = e.message; $("joinBtn").disabled = true; }
+}
+$("joinBtn").onclick = async () => {
+  try {
+    const cap = await api(`/invites/${inviteToken}/accept`, { method: "POST" });
+    $("joinStatus").textContent = `「${cap.name}」に参加しました！`;
+    $("joinBtn").disabled = true;
+    await refreshList(cap.capsule_id);
+  } catch (e) { $("joinStatus").innerHTML = `<span class="error">${e.message}</span>`; }
+};
+$("userId").addEventListener("change", showInvite);
 
 function drawGuide() {
   const c = $("guide"), stage = $("stage");
@@ -307,6 +369,7 @@ function showResult(res) {
 }
 
 refreshList().catch(() => {});
+showInvite();
 </script>
 </body>
 </html>

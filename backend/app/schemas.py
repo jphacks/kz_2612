@@ -131,6 +131,30 @@ class OpenResponse(BaseModel):
     opened: OpenedContents | None = Field(description="ok=true のときだけ入る")
 
 
+class MemberOut(BaseModel):
+    user_id: str
+    role: Literal["owner", "member"]
+    email: str | None = None
+
+
+class InviteCreated(BaseModel):
+    token: str = Field(description="招待リンクに埋め込む。例: https://<フロント>/invite/{token}")
+    expires_at: dt.datetime
+
+
+class InvitePreview(BaseModel):
+    """招待リンクを開いた人に見せる情報。参加前なので写真や中身は含めない。"""
+    capsule_id: str
+    capsule_name: str
+    open_date: dt.date
+    days_until_open: int
+    people_count: int = Field(description="鍵の写真に写っている人数（開けるときに揃う必要がある人数）")
+    members_count: int
+    invited_by: str
+    expires_at: dt.datetime
+    already_member: bool
+
+
 class AlbumEntry(BaseModel):
     opened_at: dt.datetime
     photo_url: str
