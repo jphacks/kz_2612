@@ -1,8 +1,9 @@
 import { useEffect, useState, type RefObject } from 'react'
 import type { PoseLandmarker } from '@mediapipe/tasks-vision'
+import { PoseGuideStabilizer } from '../lib/poseStabilizer'
 import type {
   PoseGuideStatus,
-  PoseLandmark,
+  StabilizedPose,
   PoseWorkerInput,
   PoseWorkerOutput,
 } from '../types/poseGuide'
@@ -19,13 +20,15 @@ type UsePoseGuideOptions = {
 
 type PoseGuideState = {
   status: PoseGuideStatus
-  landmarks: PoseLandmark[][]
+  poses: StabilizedPose[]
+  detectedCount: number
   inferenceTimeMs: number | null
 }
 
 const EMPTY_STATE: PoseGuideState = {
   status: 'loading',
-  landmarks: [],
+  poses: [],
+  detectedCount: 0,
   inferenceTimeMs: null,
 }
 
@@ -46,6 +49,7 @@ export function usePoseGuide({
     let lastFrameAt = 0
     let animationFrame = 0
     let fallbackLandmarker: PoseLandmarker | null = null
+    const stabilizer = new PoseGuideStabilizer()
 
     queueMicrotask(() => {
       if (!disposed) setWorkerState(EMPTY_STATE)
@@ -70,15 +74,17 @@ export function usePoseGuide({
           const startedAt = performance.now()
           try {
             const result = fallbackLandmarker.detectForVideo(video, timestampMs)
+            const stabilized = stabilizer.update(result.landmarks, timestampMs)
             setWorkerState({
               status: 'ready',
-              landmarks: result.landmarks,
+              ...stabilized,
               inferenceTimeMs: performance.now() - startedAt,
             })
           } catch {
             setWorkerState({
               status: 'error',
-              landmarks: [],
+              poses: [],
+              detectedCount: 0,
               inferenceTimeMs: null,
             })
             return
@@ -99,7 +105,8 @@ export function usePoseGuide({
           fallbackLandmarker = landmarker
           setWorkerState({
             status: 'ready',
-            landmarks: [],
+            poses: [],
+            detectedCount: 0,
             inferenceTimeMs: null,
           })
           animationFrame = requestAnimationFrame(tickFallback)
@@ -109,7 +116,8 @@ export function usePoseGuide({
           if (!disposed) {
             setWorkerState({
               status: 'error',
-              landmarks: [],
+              poses: [],
+              detectedCount: 0,
               inferenceTimeMs: null,
             })
           }
@@ -156,7 +164,8 @@ export function usePoseGuide({
         if (!disposed) {
           setWorkerState({
             status: 'error',
-            landmarks: [],
+            poses: [],
+            detectedCount: 0,
             inferenceTimeMs: null,
           })
         }
@@ -184,7 +193,8 @@ export function usePoseGuide({
         ready = true
         setWorkerState({
           status: 'ready',
-          landmarks: [],
+          poses: [],
+          detectedCount: 0,
           inferenceTimeMs: null,
         })
         return
@@ -192,9 +202,13 @@ export function usePoseGuide({
 
       if (event.data.type === 'RESULT') {
         inFlight = false
+        const stabilized = stabilizer.update(
+          event.data.landmarks,
+          event.data.timestampMs,
+        )
         setWorkerState({
           status: 'ready',
-          landmarks: event.data.landmarks,
+          ...stabilized,
           inferenceTimeMs: event.data.inferenceTimeMs,
         })
         return
@@ -205,7 +219,8 @@ export function usePoseGuide({
       console.warn('MediaPipe worker stopped.', event.data.message)
       setWorkerState({
         status: 'error',
-        landmarks: [],
+        poses: [],
+        detectedCount: 0,
         inferenceTimeMs: null,
       })
     }
@@ -216,7 +231,8 @@ export function usePoseGuide({
       console.warn('MediaPipe worker failed.', event.message)
       setWorkerState({
         status: 'error',
-        landmarks: [],
+        poses: [],
+        detectedCount: 0,
         inferenceTimeMs: null,
       })
     }
@@ -235,7 +251,12 @@ export function usePoseGuide({
   }, [cameraReady, enabled, sessionKey, videoRef])
 
   if (!enabled) {
-    return { status: 'disabled', landmarks: [], inferenceTimeMs: null }
+    return {
+      status: 'disabled',
+      poses: [],
+      detectedCount: 0,
+      inferenceTimeMs: null,
+    }
   }
 
   if (!cameraReady) return EMPTY_STATE

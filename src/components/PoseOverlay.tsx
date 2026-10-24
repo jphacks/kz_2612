@@ -1,5 +1,8 @@
 import { useEffect, useRef, type RefObject } from 'react'
-import type { PoseLandmark } from '../types/poseGuide'
+import type {
+  StabilizedLandmark,
+  StabilizedPose,
+} from '../types/poseGuide'
 
 const LANDMARK_INDICES = [11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28]
 const CONNECTIONS = [
@@ -17,19 +20,17 @@ const CONNECTIONS = [
   [26, 28],
 ] as const
 const PERSON_COLORS = ['#a5f4d2', '#ffd68a', '#b9c7ff', '#ffb6cf']
-const MIN_VISIBILITY = 0.5
-
 type PoseOverlayProps = {
   videoRef: RefObject<HTMLVideoElement | null>
-  landmarks: PoseLandmark[][]
+  poses: StabilizedPose[]
   mirrored: boolean
   visible: boolean
 }
 
-function isVisible(landmark: PoseLandmark | undefined) {
+function isVisible(landmark: StabilizedLandmark | undefined) {
   return Boolean(
     landmark &&
-      landmark.visibility >= MIN_VISIBILITY &&
+      landmark.displayed &&
       landmark.x >= 0 &&
       landmark.x <= 1 &&
       landmark.y >= 0 &&
@@ -39,7 +40,7 @@ function isVisible(landmark: PoseLandmark | undefined) {
 
 export function PoseOverlay({
   videoRef,
-  landmarks,
+  poses,
   mirrored,
   visible,
 }: PoseOverlayProps) {
@@ -76,7 +77,7 @@ export function PoseOverlay({
     const offsetX = (width - renderedWidth) / 2
     const offsetY = (height - renderedHeight) / 2
 
-    const point = (landmark: PoseLandmark) => {
+    const point = (landmark: StabilizedLandmark) => {
       const sourceX = offsetX + landmark.x * renderedWidth
       return {
         x: mirrored ? width - sourceX : sourceX,
@@ -84,8 +85,9 @@ export function PoseOverlay({
       }
     }
 
-    landmarks.forEach((pose, personIndex) => {
-      const color = PERSON_COLORS[personIndex % PERSON_COLORS.length]
+    poses.forEach((pose) => {
+      const color = PERSON_COLORS[(pose.id - 1) % PERSON_COLORS.length]
+      context.globalAlpha = pose.opacity
       context.lineCap = 'round'
       context.lineJoin = 'round'
       context.lineWidth = 4
@@ -94,8 +96,8 @@ export function PoseOverlay({
       context.shadowBlur = 8
 
       CONNECTIONS.forEach(([startIndex, endIndex]) => {
-        const start = pose[startIndex]
-        const end = pose[endIndex]
+        const start = pose.landmarks[startIndex]
+        const end = pose.landmarks[endIndex]
         if (!isVisible(start) || !isVisible(end)) return
         const startPoint = point(start)
         const endPoint = point(end)
@@ -106,7 +108,7 @@ export function PoseOverlay({
       })
 
       LANDMARK_INDICES.forEach((index) => {
-        const landmark = pose[index]
+        const landmark = pose.landmarks[index]
         if (!isVisible(landmark)) return
         const landmarkPoint = point(landmark)
         context.beginPath()
@@ -118,7 +120,8 @@ export function PoseOverlay({
         context.stroke()
       })
     })
-  }, [landmarks, mirrored, videoRef, visible])
+    context.globalAlpha = 1
+  }, [mirrored, poses, videoRef, visible])
 
   return <canvas ref={canvasRef} className="pose-overlay" aria-hidden="true" />
 }

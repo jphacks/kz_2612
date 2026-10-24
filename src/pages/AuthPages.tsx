@@ -177,7 +177,7 @@ export function CameraPage() {
     sessionKey: facingMode,
   })
   const expectedCount = folder?.people_count ?? 0
-  const detectedCount = poseGuide.landmarks.length
+  const detectedCount = poseGuide.detectedCount
   const guideFeedback = getPoseGuideFeedback(
     poseGuide.status,
     detectedCount,
@@ -291,7 +291,7 @@ export function CameraPage() {
           />
           <PoseOverlay
             videoRef={videoRef}
-            landmarks={poseGuide.landmarks}
+            poses={poseGuide.poses}
             mirrored={facingMode === 'user'}
             visible={guideEnabled && poseGuide.status === 'ready'}
           />

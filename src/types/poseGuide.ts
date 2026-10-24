@@ -6,6 +6,16 @@ export type PoseLandmark = {
   presence?: number
 }
 
+export type StabilizedLandmark = PoseLandmark & {
+  displayed: boolean
+}
+
+export type StabilizedPose = {
+  id: number
+  landmarks: StabilizedLandmark[]
+  opacity: number
+}
+
 export type PoseGuideStatus = 'disabled' | 'loading' | 'ready' | 'error'
 
 export type PoseWorkerInput =
