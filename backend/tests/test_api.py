@@ -98,7 +98,7 @@ def test_full_flow(env):
     assert capsule["people_count"] == 2
     assert capsule["status"] == "locked"
     assert capsule["can_open_now"] is True
-    assert capsule["attempts_left"] == 5
+    assert capsule["attempts_left"] is None  # 既定はロックなし
     assert set(capsule["guide"][0]["angles"]) == set(BASE)
     assert client.get(capsule["preview_url"]).status_code == 200
 
@@ -122,7 +122,7 @@ def test_full_flow(env):
     assert res["ok"] is False
     assert res["result"]["reason"] == "pose_mismatch"
     assert "右の人の右ひじ" in res["result"]["message"]
-    assert res["attempts_left"] == 4
+    assert res["attempts_left"] is None
     assert res["opened"] is None
     assert res["unlock"] is None
 
@@ -130,7 +130,7 @@ def test_full_flow(env):
     detector.people = [pose(0.3), pose(0.7)]
     res = open_with(client, cid).json()
     assert res["ok"] is True
-    assert res["attempts_left"] == 5
+    assert res["attempts_left"] is None
     opened = res["opened"]
     assert opened["url_expires_in"] == 60
     texts = [c["text"] for c in opened["contents"] if c["type"] == "message"]
@@ -226,13 +226,37 @@ def test_unlock_token_is_bound_to_user_and_capsule(env):
 
 
 def test_unlock_expires(env):
-    client, _, settings = env
+    client, _, _ = env
     cid = create(client).json()["capsule_id"]
-    app.dependency_overrides[deps.settings_dep] = lambda: replace(settings, unlock_minutes=0)
     u = unlock(client, cid)
+    assert client.get(f"/capsules/{cid}/contents", headers=u).status_code == 200
+    # 期限を過去にずらす
+    repo = app.dependency_overrides[deps.get_repository]()
+    session = repo.get_unlock_session(u["X-Unlock-Token"])
+    repo.create_unlock_session({**session, "token": u["X-Unlock-Token"], "expires_at": "2000-01-01T00:00:00+00:00"})
     res = client.get(f"/capsules/{cid}/contents", headers=u)
     assert res.status_code == 401
     assert res.json()["error"]["code"] == "unlock_expired"
+
+
+def test_no_lock_and_no_unlock_expiry_by_default(env):
+    client, detector, _ = env
+    cid = create(client).json()["capsule_id"]
+    assert client.get(f"/capsules/{cid}", headers={"X-User-Id": "alice"}).json()["attempts_left"] is None
+
+    # 何回失敗してもロックしない
+    detector.people = [pose(0.5)]
+    for _ in range(8):
+        res = open_with(client, cid)
+        assert res.status_code == 200
+        assert res.json()["attempts_left"] is None
+
+    # 解除の期限なし
+    detector.people = [pose(0.3), pose(0.7)]
+    res = open_with(client, cid).json()
+    assert res["unlock"]["expires_at"] is None
+    u = {"X-User-Id": "alice", "X-Unlock-Token": res["unlock"]["token"]}
+    assert client.get(f"/capsules/{cid}/contents", headers=u).status_code == 200
 
 
 def test_open_date_is_optional(env):
@@ -265,8 +289,9 @@ def test_not_open_yet_and_demo_override(env):
     assert open_with(client, cid).json()["ok"] is True
 
 
-def test_lock_after_five_failures(env):
-    client, detector, _ = env
+def test_lock_after_five_failures_when_enabled(env):
+    client, detector, settings = env
+    app.dependency_overrides[deps.settings_dep] = lambda: replace(settings, max_failures=5)
     cid = create(client).json()["capsule_id"]
     detector.people = [pose(0.5)]  # 人数違い
     lefts = [open_with(client, cid).json()["attempts_left"] for _ in range(5)]
@@ -278,7 +303,8 @@ def test_lock_after_five_failures(env):
 
 
 def test_no_person_does_not_count_as_failure(env):
-    client, detector, _ = env
+    client, detector, settings = env
+    app.dependency_overrides[deps.settings_dep] = lambda: replace(settings, max_failures=5)
     cid = create(client).json()["capsule_id"]
     detector.people = []
     res = open_with(client, cid).json()

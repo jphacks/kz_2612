@@ -62,7 +62,7 @@ class CapsuleDetail(CapsuleSummary):
     guide: list[GuidePerson]
     can_open_now: bool = Field(description="開封日を過ぎていて、ロック中でない")
     locked_until: dt.datetime | None
-    attempts_left: int
+    attempts_left: int | None = Field(description="ロックまでの残り回数。null は回数制限なし")
     contents_count: int
     opened_at: dt.datetime | None
 
@@ -96,13 +96,22 @@ class JointDiffOut(BaseModel):
     ok: bool
 
 
+class PointDiffOut(BaseModel):
+    key: list[float]
+    attempt: list[float]
+    diff: float = Field(description="肩幅を1とした距離")
+    ok: bool
+
+
 class PersonResultOut(BaseModel):
     position: int
     ok: bool
     mean_diff_deg: float | None
     max_diff_deg: float | None
     joints: dict[str, JointDiffOut]
-    missing_joints: list[str] = Field(default_factory=list, description="当時は写っていたのに今は写っていない関節")
+    missing_joints: list[str] = Field(default_factory=list, description="当時は写っていたのに今は写っていない点。両肩が見えないときは shoulders")
+    points: dict[str, PointDiffOut] = Field(default_factory=dict, description="点の位置のずれ（両肩の中心が原点、肩幅が1）")
+    mean_point_diff: float | None = None
 
 
 class MatchResultOut(BaseModel):
@@ -125,13 +134,13 @@ class OpenedContents(BaseModel):
 
 class UnlockSession(BaseModel):
     token: str = Field(description="ライブラリの API に X-Unlock-Token ヘッダーで付ける")
-    expires_at: dt.datetime
+    expires_at: dt.datetime | None = Field(description="null は期限なし")
 
 
 class OpenResponse(BaseModel):
     ok: bool
     result: MatchResultOut
-    attempts_left: int
+    attempts_left: int | None = Field(description="ロックまでの残り回数。null は回数制限なし")
     locked_until: dt.datetime | None
     opened: OpenedContents | None = Field(description="ok=true のときだけ入る")
     unlock: UnlockSession | None = Field(default=None, description="ok=true のときだけ入る。解除中の閲覧セッション")

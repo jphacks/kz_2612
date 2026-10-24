@@ -21,7 +21,7 @@
 | 形式 | JSON（`Content-Type: application/json`） |
 | 日付 | 開封日は `YYYY-MM-DD`（日本時間、**任意**）。日時は ISO 8601（UTC） |
 | 認証 | Cognito 導入までは `X-User-Id` ヘッダーでユーザーを指定（無ければ `demo-user`）。メールアドレスは `X-User-Email`（任意） |
-| ロック解除 | ポーズが一致すると `unlock.token` が返る。ライブラリの API には `X-Unlock-Token` ヘッダーで付ける（30分有効） |
+| ロック解除 | ポーズが一致すると `unlock.token` が返る。ライブラリの API には `X-Unlock-Token` ヘッダーで付ける（既定は期限なし） |
 
 ### 画像のアップロード（全画像共通の2ステップ）
 
@@ -114,7 +114,7 @@ await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
 | --- | --- | --- |
 | 422 | `no_person` | 人が写っていない → 別の写真を選ぶ |
 | 422 | `too_many_people` | 5人以上 → 4人までの写真を選ぶ（`detected_people` 付き） |
-| 422 | `pose_not_visible` | 腕が写っていないなどで、比べられる関節が1人4つ未満 → ひじと手首まで写る写真にする |
+| 422 | `pose_not_visible` | 両肩が見えない、または腕などの点（ひじ・手首・ひざ・足首）が1人2つ未満 → 両肩と腕が写る写真にする。片手を隠したポーズは OK |
 | 404 | `upload_not_found` | PUT が終わる前に呼んだ |
 
 #### GET /capsules — 一覧
@@ -195,13 +195,20 @@ await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
     "ok": false,
     "reason": "pose_mismatch",      // count_mismatch | pose_mismatch | body_not_visible | no_person | null
     "score": 62,                    // 一致度ゲージ 0〜100。許容値ちょうどで70
-    "message": "あと少し！右の人の右ひじをもう少し伸ばして",   // そのまま表示してよい
+    "message": "あと少し！右の人の右手をもう少し上に",   // そのまま表示してよい
     "expected_people": 2,
     "detected_people": 2,
     "mirrored": false,
     "people": [
       {
-        "position": 1, "ok": false, "mean_diff_deg": 24.3, "max_diff_deg": 41.0,
+        "position": 1, "ok": false,
+        "mean_point_diff": 0.41,       // 点の位置のずれの平均（肩幅を1）。0.35 以内なら一致
+        "points": {                    // 点ごとのずれ。ok で色分けする
+          "right_wrist": { "key": [-0.9, -0.2], "attempt": [-0.9, 0.6], "diff": 0.8, "ok": false },
+          "right_elbow": { "key": [-0.8, 0.6], "attempt": [-0.85, 0.65], "diff": 0.07, "ok": true }
+        },
+        "missing_joints": ["left_wrist"],   // 当時は写っていたのに今は隠れている点（"shoulders" は両肩が見えない）
+        "mean_diff_deg": 24.3, "max_diff_deg": 41.0,   // 関節角度のずれ（表示用。合否には使わない）
         "joints": {
           "right_elbow": { "key_deg": 170.0, "attempt_deg": 129.0, "diff_deg": 41.0, "ok": false }
         }
@@ -222,7 +229,7 @@ await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
 ```
 
 - `unlock.token` を保存し、ライブラリの API（🔓）に `X-Unlock-Token` ヘッダーで付ける
-- 有効なのは**解除した本人・そのフォルダだけ**、30分間。期限が切れると 401 `unlock_expired` になるので、写真認証画面に戻す
+- 有効なのは**解除した本人・そのフォルダだけ**。既定は期限なし（`expires_at: null`）。`EMO_UNLOCK_MINUTES` で期限を付けた場合、切れると 401 `unlock_expired` になるので、写真認証画面に戻す
 - 「戻る」でフォルダー一覧に戻ったらトークンは捨てる（次に入るときはまたポーズで解除する）
 
 `opened` の中身の URL は60秒で失効する。成功画面（当時と今を並べる）ですぐ使う。
@@ -239,15 +246,18 @@ await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
 }
 ```
 
-- 当時の写真で写っていた関節だけを比べる。上半身だけの写真が鍵なら上半身だけで開けられ、全身の写真が鍵なら今も全身（ひざまで）写っている必要がある。足りないときは `reason: "body_not_visible"` と、各人の `missing_joints`（写っていない関節）を返す
-- 肩の角度は「肩のラインに垂直な下向き」と上腕のなす角（腕を下ろして0度、水平で90度、真上で180度）。腰が写っていなくても測れる
-- 5回失敗すると10分ロック。失敗に数えるのは `count_mismatch` と `pose_mismatch` だけ（誰も写っていない・体が切れているのは数えない）
+- **点の位置で比べる**: ひじ・手首・ひざ・足首が、両肩の中心から見てどこにあるか（肩幅を1とした座標、y は下向きが正）。カメラとの距離が違っても比べられる
+- 当時の写真で写っていない点は比べない（片手を隠した自由なポーズでも開けられる）
+- 当時は写っていたのに今は隠れている点は、1人2点まで許す（少しずれた扱いで、スコアが下がる）。3点以上隠れると `reason: "body_not_visible"` と `missing_joints` を返す
+- 点の名前: `left_elbow` `right_elbow` `left_wrist` `right_wrist` `left_knee` `right_knee` `left_ankle` `right_ankle`（左右は写っている本人から見た左右）
+- 関節の角度（`joints`）は表示用。ひじを曲げたポーズでは少し動くだけで角度が大きく変わるので、合否には使わない
+- 失敗によるロックは既定で無し（何回でも撮り直せる。`attempts_left` は `null`）。`EMO_MAX_FAILURES` を設定すると、その回数の失敗でロックされ 423 `locked` になる。失敗に数えるのは `count_mismatch` と `pose_mismatch` だけ
 - 何度でも開けられる。開けるたびに認証アルバムに写真が増える（F-7）
 
 | エラー | code | 意味 |
 | --- | --- | --- |
 | 409 | `not_open_yet` | 開封日前（開封日を設定したときだけ。`open_date` 付き） |
-| 423 | `locked` | 失敗が続いてロック中（`locked_until` 付き） |
+| 423 | `locked` | 失敗が続いてロック中（`EMO_MAX_FAILURES` を設定したときだけ。`locked_until` 付き） |
 | 400 | `invalid_s3_key` | purpose=attempt 以外、または他人のアップロード |
 | 404 | `upload_not_found` | PUT が終わる前に呼んだ |
 
@@ -261,7 +271,7 @@ await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
 | エラー | code | 意味 |
 | --- | --- | --- |
 | 401 | `unlock_required` | トークンがない・違う → 写真認証画面へ |
-| 401 | `unlock_expired` | 解除から30分たった → 写真認証画面へ |
+| 401 | `unlock_expired` | 解除の期限切れ（`EMO_UNLOCK_MINUTES` を設定したときだけ）→ 写真認証画面へ |
 
 #### DELETE /capsules/{id}/contents/{content_id} — 写真を削除 🔓
 
@@ -389,7 +399,7 @@ React (Amplify) ──API──▶ API Gateway (HTTP API) ──▶ Lambda (コ�
 | パッケージ | コンテナイメージ（`backend/Dockerfile`）→ ECR |
 | ハンドラ | Dockerfile の `CMD ["app.main.handler"]`（設定不要） |
 | アーキテクチャ | x86_64（Docker Desktop でビルドしたもの） |
-| メモリ | 3008 MB（MediaPipe の読み込みが速くなる） |
+| メモリ | 3008 MB（姿勢推定の速さに効く。RTMPose は温まった状態で1枚約1秒） |
 | タイムアウト | 30 秒 |
 | 環境変数 | 下表 |
 
@@ -409,9 +419,10 @@ docker run --rm -p 9000:8080 -e EMO_BUCKET=... -e EMO_TABLE=... -e AWS_REGION=ap
 | `EMO_CORS_ORIGINS` | ✓ | `https://main.xxxx.amplifyapp.com,http://localhost:5173` | API の CORS 許可オリジン（カンマ区切り） |
 | `EMO_IGNORE_OPEN_DATE` | | `false` | デモ時は `true` で開封日前でも開けられる |
 | `EMO_INVITE_DAYS` | | `14` | 招待リンクの有効期限（日） |
-| `EMO_UNLOCK_MINUTES` | | `30` | ポーズで解除してからライブラリを使える時間（分） |
-| `EMO_TOLERANCE_DEG` | | `20` | 判定の許容値（度） |
-| `EMO_MAX_FAILURES` / `EMO_LOCK_MINUTES` | | `5` / `10` | 失敗回数とロック時間 |
+| `EMO_UNLOCK_MINUTES` | | `0` | ポーズで解除してからライブラリを使える時間（分）。0 は期限なし |
+| `EMO_POINT_TOLERANCE` | | `0.35` | 点の位置のずれの許容値（肩幅を1） |
+| `EMO_MAX_MISSING_POINTS` | | `2` | 開けるとき、当時写っていた点が何点まで隠れてよいか |
+| `EMO_MAX_FAILURES` / `EMO_LOCK_MINUTES` | | `0` / `10` | 何回失敗したら何分ロックするか。0 はロックしない |
 | `EMO_DETECTION_CONFIDENCE` | | `0.2` | 人物検出のしきい値 |
 
 その他の判定パラメータは `backend/README.md` を参照。

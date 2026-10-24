@@ -21,7 +21,7 @@ from app.deps import current_user, get_detector, get_match_config, get_repositor
 from app.errors import ApiError
 from app.pose.angles import PersonPose
 from app.pose.config import MatchConfig
-from app.pose.detector import PoseDetector, PoseExtractionError, draw_overlay, load_image
+from app.pose.base import Detector, PoseExtractionError, draw_overlay, load_image
 from app.pose.matcher import match_poses
 from app.repository import Repository
 from app.routers.uploads import upload_prefix
@@ -95,7 +95,9 @@ def _get_capsule_for_member(repo: Repository, capsule_id: str, user_id: str) -> 
     return capsule, member
 
 
-def _locked_until(capsule: dict) -> dt.datetime | None:
+def _locked_until(capsule: dict, settings: Settings) -> dt.datetime | None:
+    if settings.max_failures <= 0:
+        return None  # ロックしない設定なら、前にかかったロックも無視する
     until = _parse_dt(capsule.get("locked_until"))
     return until if until and until > _now() else None
 
@@ -126,6 +128,12 @@ def _is_open_day(capsule: dict, settings: Settings) -> bool:
     return open_date is None or settings.ignore_open_date or _today_jst() >= open_date
 
 
+def _attempts_left(settings: Settings, fail_count: int, locked_until: dt.datetime | None) -> int | None:
+    if settings.max_failures <= 0:
+        return None  # ロックしない設定
+    return 0 if locked_until else max(0, settings.max_failures - fail_count)
+
+
 def _require_unlock(repo: Repository, capsule_id: str, user_id: str, token: str | None) -> dict:
     """ポーズで解除した後の閲覧セッションを確かめる。トークンは解除した本人・そのカプセルにだけ有効。"""
     if not token:
@@ -133,14 +141,15 @@ def _require_unlock(repo: Repository, capsule_id: str, user_id: str, token: str 
     session = repo.get_unlock_session(token)
     if session is None or session["capsule_id"] != capsule_id or session["user_id"] != user_id:
         raise ApiError(401, "unlock_required", "みんなでポーズをそろえて、ロックを解除してね")
-    if _parse_dt(session["expires_at"]) <= _now():
+    expires_at = _parse_dt(session.get("expires_at"))
+    if expires_at is not None and expires_at <= _now():
         raise ApiError(401, "unlock_expired", "解除の時間が終わったよ。もう一度ポーズでロックを解除してね")
     return session
 
 
 def _detail(capsule: dict, role: str, repo: Repository, storage: Storage, settings: Settings) -> CapsuleDetail:
     expires = settings.view_url_expires
-    locked_until = _locked_until(capsule)
+    locked_until = _locked_until(capsule, settings)
     return CapsuleDetail(
         **_summary(capsule, role).model_dump(),
         key_photo_url=storage.presign_get(capsule["key_photo_key"], expires),
@@ -152,7 +161,7 @@ def _detail(capsule: dict, role: str, repo: Repository, storage: Storage, settin
         ],
         can_open_now=_is_open_day(capsule, settings) and locked_until is None,
         locked_until=locked_until,
-        attempts_left=settings.max_failures - capsule.get("fail_count", 0) if locked_until is None else 0,
+        attempts_left=_attempts_left(settings, capsule.get("fail_count", 0), locked_until),
         contents_count=len(repo.list_contents(capsule["capsule_id"])),
         opened_at=_parse_dt(capsule.get("opened_at")),
     )
@@ -170,7 +179,7 @@ def create_capsule(
     user: dict = Depends(current_user),
     repo: Repository = Depends(get_repository),
     storage: Storage = Depends(get_storage),
-    detector: PoseDetector = Depends(get_detector),
+    detector: Detector = Depends(get_detector),
     settings: Settings = Depends(settings_dep),
 ) -> CapsuleDetail:
     image = _load_uploaded_image(storage, settings, body.key_photo_s3_key, upload_prefix(user["user_id"], "key"))
@@ -294,7 +303,7 @@ def open_capsule(
     user: dict = Depends(current_user),
     repo: Repository = Depends(get_repository),
     storage: Storage = Depends(get_storage),
-    detector: PoseDetector = Depends(get_detector),
+    detector: Detector = Depends(get_detector),
     config: MatchConfig = Depends(get_match_config),
     settings: Settings = Depends(settings_dep),
 ) -> OpenResponse:
@@ -304,7 +313,7 @@ def open_capsule(
     if not _is_open_day(capsule, settings):
         raise ApiError(409, "not_open_yet", f"開けられるのは {capsule['open_date']} からだよ。その日まで楽しみにしててね",
                        open_date=capsule["open_date"])
-    locked_until = _locked_until(capsule)
+    locked_until = _locked_until(capsule, settings)
     if locked_until:
         raise ApiError(423, "locked", "たくさん試したので少しお休み。時間をおいてまた挑戦してね",
                        locked_until=locked_until.isoformat())
@@ -326,7 +335,7 @@ def open_capsule(
         })
     elif result.reason in COUNTED_FAILURES:
         fail_count += 1
-        if fail_count >= settings.max_failures:
+        if settings.max_failures > 0 and fail_count >= settings.max_failures:
             locked_until = _now() + dt.timedelta(minutes=settings.lock_minutes)
             fields = {"fail_count": 0, "locked_until": locked_until.isoformat()}
             fail_count = settings.max_failures
@@ -356,16 +365,17 @@ def open_capsule(
             contents=_content_views(repo, storage, capsule_id, expires),
             url_expires_in=expires,
         )
-        unlock_expires = _now() + dt.timedelta(minutes=settings.unlock_minutes)
+        unlock_expires = _now() + dt.timedelta(minutes=settings.unlock_minutes) if settings.unlock_minutes > 0 else None
         unlock = UnlockSession(token=secrets.token_urlsafe(24), expires_at=unlock_expires)
-        repo.create_unlock_session({
-            "token": unlock.token, "capsule_id": capsule_id, "user_id": user["user_id"],
-            "expires_at": unlock_expires.isoformat(), "ttl": int(unlock_expires.timestamp()),
-        })
+        session = {"token": unlock.token, "capsule_id": capsule_id, "user_id": user["user_id"],
+                   "expires_at": unlock_expires.isoformat() if unlock_expires else None}
+        if unlock_expires:
+            session["ttl"] = int(unlock_expires.timestamp())
+        repo.create_unlock_session(session)
     return OpenResponse(
         ok=result.ok,
         result=result.to_dict(),
-        attempts_left=0 if locked_until else settings.max_failures - fail_count,
+        attempts_left=_attempts_left(settings, fail_count, locked_until),
         locked_until=locked_until,
         opened=opened,
         unlock=unlock,
