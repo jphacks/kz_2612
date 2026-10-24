@@ -85,6 +85,8 @@ pnpm test
 
 - API認証はCognito導入前のため、.env.local の VITE_DEMO_USER_ID を X-User-Id として送ります。
 - 写真認証は端末カメラで撮影し、RTMPoseによる最終判定APIへ送ります。
+- 撮影中はMediaPipe Pose LandmarkerをWeb Workerで実行し、最大4人の人数と骨格をガイド表示します。
+- MediaPipeのWASMとモデルは初回利用時に外部配信元から読み込みます。読み込みに失敗しても撮影とRTMPose判定は利用できます。
 - 解除トークンはタブの sessionStorage に保存し、更新後も最大12時間維持します。
 - 画像はブラウザでJPEGへ正規化してから、発行されたアップロードURLへ直接PUTします。
-- Googleログイン、MediaPipeによるリアルタイム撮影支援、フォルダ削除は未接続です。
+- Googleログインとフォルダ削除は未接続です。

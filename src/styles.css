@@ -1648,86 +1648,13 @@ p {
   background: rgba(116, 82, 214, 0.2);
 }
 
-.pose-guide {
+.pose-overlay {
   position: absolute;
   z-index: 2;
-  bottom: 22%;
-  width: 42px;
-  height: 175px;
-  border: solid rgba(172, 255, 222, 0.84);
-  border-width: 0 2px;
-  filter: drop-shadow(0 0 7px rgba(123, 255, 204, 0.55));
-}
-
-.pose-guide::before {
-  position: absolute;
-  top: -36px;
-  left: 5px;
-  width: 29px;
-  height: 29px;
-  border: 2px solid #a5f4d2;
-  border-radius: 50%;
-  content: "";
-}
-
-.pose-guide i,
-.pose-guide b,
-.pose-guide em,
-.pose-guide span {
-  position: absolute;
-  display: block;
-  height: 2px;
-  background: #a5f4d2;
-  transform-origin: 0 50%;
-}
-
-.pose-guide i {
-  top: 20px;
-  left: 18px;
-  width: 62px;
-  transform: rotate(-37deg);
-}
-
-.pose-guide b {
-  top: 20px;
-  left: 18px;
-  width: 58px;
-  transform: rotate(205deg);
-}
-
-.pose-guide em {
-  bottom: 21px;
-  left: 17px;
-  width: 79px;
-  transform: rotate(74deg);
-}
-
-.pose-guide span {
-  right: 19px;
-  bottom: 21px;
-  width: 79px;
-  transform: rotate(104deg);
-  transform-origin: 100% 50%;
-}
-
-.pose-guide--1 {
-  left: 13%;
-  transform: scale(0.86) translateY(10px);
-}
-
-.pose-guide--2 {
-  left: 35%;
-  transform: rotate(-2deg);
-}
-
-.pose-guide--3 {
-  right: 35%;
-  transform: rotate(3deg);
-}
-
-.pose-guide--4 {
-  right: 13%;
-  transform: scale(0.88) translateY(8px);
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
 }
 
 .camera-hint {
@@ -1736,7 +1663,9 @@ p {
   bottom: 7%;
   left: 50%;
   display: flex;
-  min-width: 290px;
+  width: max-content;
+  max-width: calc(100% - 38px);
+  min-width: min(290px, calc(100% - 38px));
   align-items: center;
   justify-content: center;
   gap: 8px;
@@ -1752,6 +1681,20 @@ p {
 
 .camera-hint svg {
   color: var(--coral);
+}
+
+.camera-hint--success {
+  color: #123c30;
+  background: rgba(217, 255, 239, 0.94);
+}
+
+.camera-hint--success svg {
+  color: #278865;
+}
+
+.camera-hint--warning {
+  color: #5d3714;
+  background: rgba(255, 239, 211, 0.94);
 }
 
 .camera-screen__bottom {
@@ -1771,6 +1714,16 @@ p {
   color: rgba(255, 255, 255, 0.77);
   background: none;
   font-size: 10px;
+  cursor: pointer;
+}
+
+.camera-help.is-active {
+  color: #a5f4d2;
+}
+
+.camera-help:focus-visible {
+  outline: 2px solid #a5f4d2;
+  outline-offset: 5px;
 }
 
 .shutter-button {
@@ -1790,6 +1743,10 @@ p {
   border-radius: 50%;
   background: #fff;
   transition: transform 120ms ease;
+}
+
+.shutter-button:disabled {
+  opacity: 0.45;
 }
 
 .shutter-button:active span {

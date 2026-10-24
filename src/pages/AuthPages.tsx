@@ -16,8 +16,11 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { getCapsule, openCapsule, uploadImage } from '../api/client'
 import type { CapsuleDetail } from '../api/types'
 import { AppShell, PageHeader } from '../components/AppShell'
+import { PoseOverlay } from '../components/PoseOverlay'
 import { Badge, Button, Card } from '../components/Ui'
+import { usePoseGuide } from '../hooks/usePoseGuide'
 import { captureVideoFrame } from '../lib/images'
+import { getPoseGuideFeedback } from '../lib/poseGuide'
 import {
   getAuthResult,
   getUnlockSession,
@@ -164,8 +167,26 @@ export function CameraPage() {
   const [folder, setFolder] = useState<CapsuleDetail | null>(null)
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user')
   const [cameraReady, setCameraReady] = useState(false)
+  const [guideEnabled, setGuideEnabled] = useState(true)
   const [processing, setProcessing] = useState(false)
   const [error, setError] = useState('')
+  const poseGuide = usePoseGuide({
+    videoRef,
+    enabled: guideEnabled,
+    cameraReady,
+    sessionKey: facingMode,
+  })
+  const expectedCount = folder?.people_count ?? 0
+  const detectedCount = poseGuide.landmarks.length
+  const guideFeedback = getPoseGuideFeedback(
+    poseGuide.status,
+    detectedCount,
+    expectedCount,
+  )
+  const countMatches =
+    poseGuide.status === 'ready' &&
+    expectedCount > 0 &&
+    detectedCount === expectedCount
 
   useEffect(() => {
     if (!folderId) return
@@ -235,8 +256,14 @@ export function CameraPage() {
             <X size={24} />
           </button>
           <div>
-            <span>鍵写真は{folder?.people_count ?? '—'}人</span>
-            <small>ガイドは目安です</small>
+            <span>
+              {poseGuide.status === 'ready' && expectedCount
+                ? detectedCount + ' / ' + expectedCount + '人を検出'
+                : '鍵写真は' + (folder?.people_count ?? '—') + '人'}
+            </span>
+            <small>
+              {guideEnabled ? 'MediaPipe撮影ガイド' : '撮影ガイドOFF'}
+            </small>
           </div>
           <button
             className="camera-flip"
@@ -262,14 +289,27 @@ export function CameraPage() {
             playsInline
             onLoadedMetadata={() => setCameraReady(true)}
           />
-          {Array.from({ length: folder?.people_count ?? 0 }).map((_, index) => (
-            <div className={'pose-guide pose-guide--' + (index + 1)} key={index}>
-              <i /><b /><em /><span />
-            </div>
-          ))}
+          <PoseOverlay
+            videoRef={videoRef}
+            landmarks={poseGuide.landmarks}
+            mirrored={facingMode === 'user'}
+            visible={guideEnabled && poseGuide.status === 'ready'}
+          />
           <div className="camera-stage__frame" />
           {!cameraReady && !error && (
             <div className="camera-hint"><LoaderCircle className="button__spinner" size={17} />カメラを準備中</div>
+          )}
+          {cameraReady && !error && !processing && (
+            <div
+              className={'camera-hint camera-hint--' + guideFeedback.tone}
+              role="status"
+              aria-live="polite"
+            >
+              {poseGuide.status === 'loading' && (
+                <LoaderCircle className="button__spinner" size={17} />
+              )}
+              {guideFeedback.text}
+            </div>
           )}
           {error && <div className="camera-hint camera-hint--error">{error}</div>}
           {processing && (
@@ -282,9 +322,14 @@ export function CameraPage() {
         </div>
 
         <div className="camera-screen__bottom">
-          <button className="camera-help" type="button">
+          <button
+            className={'camera-help ' + (guideEnabled ? 'is-active' : '')}
+            type="button"
+            aria-pressed={guideEnabled}
+            onClick={() => setGuideEnabled((value) => !value)}
+          >
             <Image size={18} />
-            ガイド
+            ガイド{guideEnabled ? 'ON' : 'OFF'}
           </button>
           <button
             className="shutter-button"
@@ -296,8 +341,16 @@ export function CameraPage() {
             <span />
           </button>
           <div className="camera-auto">
-            <strong>{processing ? '判定中' : 'READY'}</strong>
-            <small>{processing ? 'そのまま待ってね' : '撮影できます'}</small>
+            <strong>
+              {processing ? '判定中' : countMatches ? '人数OK' : 'READY'}
+            </strong>
+            <small>
+              {processing
+                ? 'そのまま待ってね'
+                : countMatches
+                  ? 'ポーズを合わせよう'
+                  : '撮影できます'}
+            </small>
           </div>
         </div>
       </div>
