@@ -31,6 +31,23 @@ def test_blank_image_has_no_key(detector):
     assert e.value.code == "no_person"
 
 
+def test_key_without_measurable_joints_is_rejected(detector):
+    # 顔と肩だけの写真（ひじ・手首が写っていない）は鍵にできない
+    from app.pose.angles import PersonPose
+    from app.pose.detector import PoseExtractionError
+
+    bust = PersonPose(angles={"left_elbow": None, "right_elbow": None, "left_shoulder": None,
+                              "right_shoulder": None, "left_knee": None, "right_knee": None}, hip_center_x=0.5)
+    detector.detect = lambda image: [bust]
+    try:
+        with pytest.raises(PoseExtractionError) as e:
+            detector.extract_key(Image.new("RGB", (64, 64)))
+        assert e.value.code == "pose_not_visible"
+        assert "ひじと手首" in e.value.message
+    finally:
+        del detector.detect
+
+
 @pytest.mark.skipif(not (IMAGES / "person.jpg").exists(), reason="tests/images/person.jpg が無い")
 def test_same_photo_matches_itself(detector):
     from app.pose.detector import load_image

@@ -19,14 +19,17 @@ L_KNEE, R_KNEE = 25, 26
 L_ANKLE, R_ANKLE = 27, 28
 
 # 関節名 → (端点A, 頂点, 端点B)。頂点での角度 ∠A-頂点-B を測る
+# 肩だけは例外で、B は反対側の肩。腰が写っていない上半身だけの写真でも測れるよう、
+# 「肩のラインに垂直な下向き（＝胴体の向き）」と上腕のなす角を測る（腕を下ろして0度、水平で90度、真上で180度）
 JOINTS: dict[str, tuple[int, int, int]] = {
     "left_elbow": (L_SHOULDER, L_ELBOW, L_WRIST),
     "right_elbow": (R_SHOULDER, R_ELBOW, R_WRIST),
-    "left_shoulder": (L_ELBOW, L_SHOULDER, L_HIP),
-    "right_shoulder": (R_ELBOW, R_SHOULDER, R_HIP),
+    "left_shoulder": (L_ELBOW, L_SHOULDER, R_SHOULDER),
+    "right_shoulder": (R_ELBOW, R_SHOULDER, L_SHOULDER),
     "left_knee": (L_HIP, L_KNEE, L_ANKLE),
     "right_knee": (R_HIP, R_KNEE, R_ANKLE),
 }
+SHOULDER_JOINTS = ("left_shoulder", "right_shoulder")
 
 GUIDE_POINTS: dict[str, int] = {
     "left_shoulder": L_SHOULDER, "right_shoulder": R_SHOULDER,
@@ -72,6 +75,10 @@ class PersonPose:
             "hip_center_x": round(self.hip_center_x, 4),
         }
 
+    def measurable_joints(self) -> int:
+        """角度が測れた関節の数。"""
+        return sum(v is not None for v in self.angles.values())
+
     def guide_points(self) -> dict[str, list[float] | None]:
         """開封カメラのガイド表示用に、体の12点だけを正規化座標で返す（顔の点は含めない）。"""
         if not self.landmarks:
@@ -105,6 +112,15 @@ def joint_angle(a: np.ndarray, vertex: np.ndarray, b: np.ndarray) -> float:
     return float(np.degrees(np.arccos(np.clip(cos, -1.0, 1.0))))
 
 
+def shoulder_angle(elbow: np.ndarray, shoulder: np.ndarray, other_shoulder: np.ndarray) -> float:
+    """上腕と「肩のラインに垂直な下向き」のなす角。腰の位置を使わない。"""
+    line = other_shoulder - shoulder
+    down = np.array([-line[1], line[0]])
+    if down[1] < 0:  # 画像の y は下向きが正。下を向く方の垂線を選ぶ
+        down = -down
+    return joint_angle(elbow, shoulder, shoulder + down)
+
+
 def person_pose_from_landmarks(
     landmarks: Sequence[Landmark],
     image_width: int,
@@ -124,6 +140,8 @@ def person_pose_from_landmarks(
     for name, (a, v, b) in JOINTS.items():
         if min(landmarks[a].visibility, landmarks[v].visibility, landmarks[b].visibility) < min_visibility:
             angles[name] = None
+        elif name in SHOULDER_JOINTS:
+            angles[name] = shoulder_angle(point(a), point(v), point(b))
         else:
             angles[name] = joint_angle(point(a), point(v), point(b))
 

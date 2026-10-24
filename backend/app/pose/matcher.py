@@ -50,6 +50,8 @@ class PersonResult:
     max_diff_deg: float | None
     # 撮影画像側の関節名 → ずれ
     joints: dict[str, JointDiff] = field(default_factory=dict)
+    # 当時は写っていたのに今は写っていない関節（撮影画像側の関節名）
+    missing_joints: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
@@ -58,6 +60,7 @@ class PersonResult:
             "mean_diff_deg": None if self.mean_diff_deg is None else round(self.mean_diff_deg, 1),
             "max_diff_deg": None if self.max_diff_deg is None else round(self.max_diff_deg, 1),
             "joints": {k: v.to_dict() for k, v in self.joints.items()},
+            "missing_joints": self.missing_joints,
         }
 
 
@@ -109,15 +112,23 @@ def _compare_person(
     key: PersonPose, attempt: PersonPose, position: int, config: MatchConfig, joint_name_map: dict[str, str]
 ) -> PersonResult:
     joints: dict[str, JointDiff] = {}
+    missing: list[str] = []
     for name, key_deg in key.angles.items():
+        if key_deg is None:
+            # 当時の写真で写っていない関節（上半身だけの写真の膝など）は比べない
+            continue
         attempt_deg = attempt.angles.get(name)
-        if key_deg is None or attempt_deg is None:
+        if attempt_deg is None:
+            # 当時写っていた関節は今も写っている必要がある（全身の鍵を上半身だけで開けられないように）
+            missing.append(joint_name_map[name])
             continue
         diff = abs(key_deg - attempt_deg)
         joints[joint_name_map[name]] = JointDiff(key_deg, attempt_deg, diff, diff <= config.tolerance_deg)
 
-    if len(joints) < config.min_joints_per_person:
-        return PersonResult(position=position, ok=False, mean_diff_deg=None, max_diff_deg=None, joints=joints)
+    if missing or len(joints) < config.min_joints_per_person:
+        return PersonResult(
+            position=position, ok=False, mean_diff_deg=None, max_diff_deg=None, joints=joints, missing_joints=missing
+        )
 
     diffs = [j.diff_deg for j in joints.values()]
     mean_diff = sum(diffs) / len(diffs)
@@ -171,13 +182,18 @@ def match_poses(key: list[PersonPose], attempt: list[PersonPose], config: MatchC
     overall = _overall_mean(people)
     if overall == float("inf"):
         not_visible = next(r for r in people if r.mean_diff_deg is None)
-        label = _position_label(not_visible.position, detected) or ""
-        who = label[:-1] if label else "体"
+        label = _position_label(not_visible.position, detected)
+        if any(j.endswith("knee") for j in not_visible.missing_joints):
+            msg = f"{label}ひざまで写るように、少し下がってみて"
+        elif not_visible.missing_joints:
+            msg = f"{label}腕まで写るように、少し下がってみて"
+        else:
+            msg = f"{label[:-1] if label else '体'}がよく見えないみたい。少し下がって、体が写るようにしてみて"
         return MatchResult(
             False,
             "body_not_visible",
             0,
-            f"{who}がよく見えないみたい。少し下がって、全身が写るようにしてみて",
+            msg,
             expected,
             detected,
             is_mirrored,

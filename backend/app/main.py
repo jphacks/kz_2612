@@ -7,10 +7,11 @@ from __future__ import annotations
 
 import logging
 import mimetypes
+from pathlib import Path
 
 from fastapi import Depends, FastAPI, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import FileResponse, Response
 from mangum import Mangum
 from PIL import Image
 
@@ -52,6 +53,11 @@ def warmup() -> dict:
 
 
 if settings.backend == "local":
+    @app.get("/dev", include_in_schema=False)
+    def dev_page() -> FileResponse:
+        """1人でも試せる簡易テストページ（ローカル専用。本番のフロントではない）。"""
+        return FileResponse(Path(__file__).parent / "static" / "dev.html")
+
     # ローカル開発用の S3 もどき。署名と期限は LocalStorage が検証する
     @app.put("/local-s3/{key:path}", include_in_schema=False)
     async def local_put(

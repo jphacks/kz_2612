@@ -102,6 +102,7 @@ class PersonResultOut(BaseModel):
     mean_diff_deg: float | None
     max_diff_deg: float | None
     joints: dict[str, JointDiffOut]
+    missing_joints: list[str] = Field(default_factory=list, description="当時は写っていたのに今は写っていない関節")
 
 
 class MatchResultOut(BaseModel):

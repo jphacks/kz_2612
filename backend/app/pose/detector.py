@@ -42,6 +42,7 @@ class PoseDetector:
         model_path: str | Path | None = None,
         min_visibility: float = 0.5,
         detection_confidence: float | None = None,
+        min_joints_per_person: int = 4,
     ):
         model_path = Path(model_path or os.environ.get("EMO_POSE_MODEL_PATH") or DEFAULT_MODEL_PATH)
         if not model_path.exists():
@@ -59,6 +60,7 @@ class PoseDetector:
         )
         self._landmarker = vision.PoseLandmarker.create_from_options(options)
         self.min_visibility = min_visibility
+        self.min_joints_per_person = min_joints_per_person
 
     def close(self) -> None:
         self._landmarker.close()
@@ -93,6 +95,17 @@ class PoseDetector:
             raise PoseExtractionError(
                 "too_many_people", f"{MAX_PEOPLE}人までの写真を選んでね", len(people)
             )
+        # 比べられる関節が少なすぎる鍵は、どう撮っても開けられないカプセルになるので作らせない
+        unreadable = [i for i, p in enumerate(people) if p.measurable_joints() < self.min_joints_per_person]
+        if unreadable:
+            who = "" if len(people) == 1 else (
+                f"{'左' if unreadable[0] == 0 else '右'}の人の" if len(people) == 2 else f"左から{unreadable[0] + 1}番目の人の"
+            )
+            raise PoseExtractionError(
+                "pose_not_visible",
+                f"{who}ポーズが読み取れなかったよ。ひじと手首まで写るように、少し離れて撮ってね",
+                len(people),
+            )
         return people
 
 
@@ -102,7 +115,7 @@ _BONES = [(11, 12), (11, 23), (12, 24), (23, 24)] + [
 ]
 
 
-def draw_overlay(image: Image.Image, people: list[PersonPose]) -> Image.Image:
+def draw_overlay(image: Image.Image, people: list[PersonPose], min_visibility: float = 0.5) -> Image.Image:
     """抽出結果のプレビュー（骨格を重ねた写真）を作る。"""
     out = image.copy()
     draw = ImageDraw.Draw(out)
@@ -113,10 +126,14 @@ def draw_overlay(image: Image.Image, people: list[PersonPose]) -> Image.Image:
             continue
         color = _COLORS[idx % len(_COLORS)]
         pts = [(lm.x * w, lm.y * h) for lm in person.landmarks]
+        # 写っていない点（画面外を推測した点）は描かない。描くと読み取れているように見えてしまう
+        seen = [lm.visibility >= min_visibility for lm in person.landmarks]
         for a, b in set(_BONES):
-            draw.line([pts[a], pts[b]], fill=color, width=r)
+            if seen[a] and seen[b]:
+                draw.line([pts[a], pts[b]], fill=color, width=r)
         for _, v, _ in JOINTS.values():
-            x, y = pts[v]
-            draw.ellipse([x - r, y - r, x + r, y + r], fill=color)
+            if seen[v]:
+                x, y = pts[v]
+                draw.ellipse([x - r, y - r, x + r, y + r], fill=color)
         draw.text((person.hip_center_x * w, 10), str(idx + 1), fill=color)
     return out

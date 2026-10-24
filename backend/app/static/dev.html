@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>エモ認証 テストプレイ</title>
+<style>
+  :root { --bg:#fbf8f3; --card:#fff; --ink:#2b2622; --sub:#7a7068; --accent:#d9653b; --ok:#2e9e6b; --ng:#d64545; --line:#e8e1d8; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font-family: system-ui, "Hiragino Sans", "Yu Gothic UI", sans-serif; line-height:1.6; }
+  main { max-width: 860px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .lead { color: var(--sub); margin: 0 0 20px; font-size: 14px; }
+  section { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:18px; margin-bottom:16px; }
+  h2 { font-size: 17px; margin: 0 0 12px; }
+  label { display:block; font-size:13px; color:var(--sub); margin:10px 0 4px; }
+  input[type=text], input[type=date], select, textarea { width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:8px; font:inherit; background:#fff; }
+  button { background:var(--accent); color:#fff; border:0; border-radius:999px; padding:9px 18px; font:inherit; font-weight:600; cursor:pointer; margin-top:12px; margin-right:6px; }
+  button.secondary { background:#fff; color:var(--accent); border:1px solid var(--accent); }
+  button:disabled { opacity:.5; cursor:default; }
+  .row { display:flex; gap:12px; flex-wrap:wrap; }
+  .row > * { flex:1 1 260px; }
+  img.photo { width:100%; border-radius:10px; border:1px solid var(--line); display:block; }
+  .stage { position:relative; width:100%; max-width:640px; aspect-ratio: 4/3; background:#222; border-radius:12px; overflow:hidden; transform: scaleX(-1); }
+  .stage video, .stage canvas { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+  .countdown { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:96px; font-weight:800; color:#fff; text-shadow:0 2px 12px #000a; transform: scaleX(-1); pointer-events:none; }
+  .msg { font-size:20px; font-weight:700; margin:12px 0 6px; }
+  .gauge { height:12px; background:var(--line); border-radius:999px; overflow:hidden; }
+  .gauge > div { height:100%; background:var(--accent); width:0; transition: width .4s; }
+  .joints { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+  .chip { font-size:12px; padding:2px 10px; border-radius:999px; color:#fff; }
+  .chip.ok { background:var(--ok); } .chip.ng { background:var(--ng); }
+  .status { font-size:13px; color:var(--sub); margin-top:8px; min-height:1.4em; }
+  .error { color: var(--ng); }
+  .letters { margin-top:12px; }
+  .letter { background:#fff7ef; border:1px solid #f1dcc7; border-radius:10px; padding:10px 14px; margin-top:8px; white-space:pre-wrap; }
+  .caption { text-align:center; font-size:13px; color:var(--sub); margin-top:4px; }
+  .hidden { display:none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>エモ認証 テストプレイ</h1>
+  <p class="lead">ローカル確認用の簡易画面（本番のフロントではありません）。1人でも、自分が写った写真を鍵にして試せます。</p>
+
+  <section>
+    <h2>① カプセルを作る</h2>
+    <div class="row">
+      <div>
+        <label>思い出の写真（鍵）</label>
+        <input id="keyFile" type="file" accept="image/*">
+        <button class="secondary" id="keyFromCam">カメラで撮って鍵にする</button>
+        <div id="keyCam" class="hidden">
+          <p class="status" style="margin:10px 0 0">💡 両ひじと両手首まで写るように、少し離れてポーズしてね（顔と肩だけだと鍵になりません）</p>
+          <div class="stage" style="margin-top:8px">
+            <video id="keyVideo" autoplay playsinline muted></video>
+            <div class="countdown" id="keyCountdown"></div>
+          </div>
+          <button id="keyShoot">撮影（3秒後）</button>
+          <button class="secondary" id="keyRetake" disabled>撮り直す</button>
+        </div>
+        <label>カプセル名</label>
+        <input id="capName" type="text" value="テストカプセル">
+        <label>開封日</label>
+        <input id="openDate" type="date">
+        <button id="createBtn">カプセルを作る</button>
+        <div class="status" id="createStatus"></div>
+      </div>
+      <div><img id="preview" class="photo hidden" alt="骨格プレビュー"></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>② 中身を入れる</h2>
+    <label>カプセル</label>
+    <select id="capSelect"></select>
+    <label>メッセージ</label>
+    <textarea id="letter" rows="3">10年後の自分へ。元気にしてる？</textarea>
+    <button id="letterBtn">メッセージを入れる</button>
+    <div class="status" id="letterStatus"></div>
+  </section>
+
+  <section>
+    <h2>③ ポーズで開ける</h2>
+    <p class="lead" style="margin:0 0 10px">緑の線が当時のポーズ。合わせたら「撮影」で3秒後に自動撮影します。</p>
+    <div class="stage" id="stage">
+      <video id="video" autoplay playsinline muted></video>
+      <canvas id="guide"></canvas>
+      <div class="countdown" id="countdown"></div>
+    </div>
+    <button class="secondary" id="camBtn">カメラを起動</button>
+    <button id="shootBtn" disabled>撮影して開ける</button>
+    <div class="status" id="openStatus"></div>
+    <div id="result" class="hidden">
+      <div class="msg" id="resultMsg"></div>
+      <div class="gauge"><div id="gauge"></div></div>
+      <div class="status" id="resultSub"></div>
+      <div id="people"></div>
+    </div>
+  </section>
+
+  <section id="openedSec" class="hidden">
+    <h2>④ 開封！</h2>
+    <div class="row">
+      <div><img id="thenImg" class="photo" alt="当時"><div class="caption">あの日</div></div>
+      <div><img id="nowImg" class="photo" alt="今"><div class="caption">今日</div></div>
+    </div>
+    <div class="letters" id="letters"></div>
+  </section>
+</main>
+
+<script>
+const API = location.origin;
+const H = { "Content-Type": "application/json", "X-User-Id": "demo-user" };
+const $ = (id) => document.getElementById(id);
+const JOINT_JA = { left_elbow:"左ひじ", right_elbow:"右ひじ", left_shoulder:"左腕", right_shoulder:"右腕", left_knee:"左ひざ", right_knee:"右ひざ" };
+const BONES = [["left_shoulder","right_shoulder"],["left_shoulder","left_elbow"],["left_elbow","left_wrist"],["right_shoulder","right_elbow"],["right_elbow","right_wrist"],["left_shoulder","left_hip"],["right_shoulder","right_hip"],["left_hip","right_hip"],["left_hip","left_knee"],["left_knee","left_ankle"],["right_hip","right_knee"],["right_knee","right_ankle"]];
+let stream = null, current = null;
+
+$("openDate").value = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
+
+async function api(path, opts = {}) {
+  const res = await fetch(API + path, { headers: H, ...opts });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error ? body.error.message : `HTTP ${res.status}`);
+  return body;
+}
+
+async function upload(purpose, blob) {
+  const up = await api("/uploads", { method: "POST", body: JSON.stringify({ purpose, content_type: "image/jpeg" }) });
+  const put = await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
+  if (!put.ok) throw new Error("アップロードに失敗しました");
+  return up.s3_key;
+}
+
+function toJpeg(fileOrCanvas) {
+  return new Promise((resolve) => {
+    if (fileOrCanvas instanceof HTMLCanvasElement) return fileOrCanvas.toBlob(resolve, "image/jpeg", 0.9);
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement("canvas");
+      c.width = img.naturalWidth; c.height = img.naturalHeight;
+      c.getContext("2d").drawImage(img, 0, 0);
+      c.toBlob(resolve, "image/jpeg", 0.9);
+    };
+    img.src = URL.createObjectURL(fileOrCanvas);
+  });
+}
+
+// 撮影画像は左右反転しない（表示だけ鏡にしている）
+function captureFrame(v = $("video")) {
+  const c = document.createElement("canvas");
+  c.width = v.videoWidth; c.height = v.videoHeight;
+  c.getContext("2d").drawImage(v, 0, 0);
+  return c;
+}
+
+async function startCamera() {
+  if (stream) return;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 960 }, audio: false });
+    // ①の鍵撮影と③の開封カメラで同じ映像を使う
+    $("video").srcObject = stream;
+    $("keyVideo").srcObject = stream;
+    $("shootBtn").disabled = false;
+    $("openStatus").textContent = "";
+  } catch (e) {
+    const msg = `<span class="error">カメラを起動できませんでした：${e.message}</span>`;
+    $("openStatus").innerHTML = msg; $("createStatus").innerHTML = msg;
+    throw e;
+  }
+}
+
+async function refreshList(selectId) {
+  const list = await api("/capsules");
+  $("capSelect").innerHTML = list.map(c =>
+    `<option value="${c.capsule_id}">${c.name}（${c.people_count}人・${c.status === "opened" ? "開封済み" : "あと" + c.days_until_open + "日"}）</option>`).join("");
+  if (selectId) $("capSelect").value = selectId;
+  if (list.length) await loadCapsule($("capSelect").value);
+}
+
+async function loadCapsule(id) {
+  current = await api(`/capsules/${id}`);
+  drawGuide();
+}
+
+function drawGuide() {
+  const c = $("guide"), stage = $("stage");
+  c.width = stage.clientWidth; c.height = stage.clientHeight;
+  const g = c.getContext("2d");
+  g.clearRect(0, 0, c.width, c.height);
+  if (!current) return;
+  g.lineWidth = 5; g.strokeStyle = "rgba(80, 230, 140, .75)"; g.fillStyle = "rgba(80, 230, 140, .9)";
+  for (const p of current.guide) {
+    const pt = (n) => p.points[n] && [p.points[n][0] * c.width, p.points[n][1] * c.height];
+    for (const [a, b] of BONES) {
+      const A = pt(a), B = pt(b);
+      if (A && B) { g.beginPath(); g.moveTo(...A); g.lineTo(...B); g.stroke(); }
+    }
+  }
+}
+window.addEventListener("resize", drawGuide);
+
+$("keyFromCam").onclick = async () => {
+  await startCamera();
+  $("keyCam").classList.remove("hidden");
+  $("keyFromCam").classList.add("hidden");
+  $("createStatus").textContent = "ポーズを決めたら「撮影」を押してね";
+};
+
+$("keyShoot").onclick = async () => {
+  $("keyShoot").disabled = true;
+  await countdown($("keyCountdown"));
+  const frame = captureFrame($("keyVideo"));
+  window._keyBlob = await toJpeg(frame);
+  $("keyFile").value = "";
+  // 撮った写真を止めて見せる（撮り直すまで）
+  $("keyVideo").pause();
+  $("keyShoot").disabled = false;
+  $("keyRetake").disabled = false;
+  $("createStatus").textContent = "鍵の写真を撮りました。よければ「カプセルを作る」を押してね";
+};
+
+$("keyRetake").onclick = () => {
+  $("keyVideo").play();
+  window._keyBlob = null;
+  $("keyRetake").disabled = true;
+  $("createStatus").textContent = "ポーズを決めたら「撮影」を押してね";
+};
+
+$("createBtn").onclick = async () => {
+  const st = $("createStatus");
+  try {
+    const file = $("keyFile").files[0];
+    const blob = file ? await toJpeg(file) : window._keyBlob;
+    if (!blob) throw new Error("写真を選ぶか、カメラで撮ってね");
+    st.textContent = "ポーズを読み取っています…";
+    const key = await upload("key", blob);
+    const cap = await api("/capsules", { method: "POST", body: JSON.stringify({ name: $("capName").value, open_date: $("openDate").value, key_photo_s3_key: key }) });
+    $("preview").src = cap.preview_url; $("preview").classList.remove("hidden");
+    st.textContent = `作成しました（${cap.people_count}人を検出）`;
+    window._keyBlob = null;
+    await refreshList(cap.capsule_id);
+  } catch (e) { st.innerHTML = `<span class="error">${e.message}</span>`; }
+};
+
+$("capSelect").onchange = (e) => loadCapsule(e.target.value);
+
+$("letterBtn").onclick = async () => {
+  const st = $("letterStatus");
+  try {
+    await api(`/capsules/${$("capSelect").value}/contents`, { method: "POST", body: JSON.stringify({ type: "message", text: $("letter").value }) });
+    st.textContent = "メッセージを入れました（開けるまで見られません）";
+  } catch (e) { st.innerHTML = `<span class="error">${e.message}</span>`; }
+};
+
+$("camBtn").onclick = startCamera;
+
+function countdown(el = $("countdown")) {
+  return new Promise((resolve) => {
+    let n = 3; el.textContent = n;
+    const t = setInterval(() => {
+      n -= 1;
+      if (n === 0) { clearInterval(t); el.textContent = ""; resolve(); }
+      else el.textContent = n;
+    }, 1000);
+  });
+}
+
+$("shootBtn").onclick = async () => {
+  if (!current) { $("openStatus").innerHTML = `<span class="error">先にカプセルを作ってね</span>`; return; }
+  $("shootBtn").disabled = true;
+  try {
+    await countdown();
+    const blob = await toJpeg(captureFrame());
+    $("openStatus").textContent = "照合しています…";
+    const key = await upload("attempt", blob);
+    const res = await api(`/capsules/${current.capsule_id}/open`, { method: "POST", body: JSON.stringify({ s3_key: key }) });
+    showResult(res);
+  } catch (e) {
+    $("openStatus").innerHTML = `<span class="error">${e.message}</span>`;
+  } finally { $("shootBtn").disabled = false; }
+};
+
+function showResult(res) {
+  const r = res.result;
+  $("openStatus").textContent = "";
+  $("result").classList.remove("hidden");
+  $("resultMsg").textContent = r.message;
+  $("resultMsg").style.color = r.ok ? "var(--ok)" : "var(--ink)";
+  $("gauge").style.width = r.score + "%";
+  $("resultSub").textContent = `一致度 ${r.score} ／ 検出 ${r.detected_people}人（当時 ${r.expected_people}人）／ 残り ${res.attempts_left}回`;
+  $("people").innerHTML = r.people.map(p => `
+    <div class="status">左から${p.position + 1}人目：平均ずれ ${p.mean_diff_deg ?? "-"}°${
+      p.missing_joints.length ? `（写っていない：${p.missing_joints.map(j => JOINT_JA[j]).join("・")}）` : ""}</div>
+    <div class="joints">${Object.entries(p.joints).map(([k, j]) =>
+      `<span class="chip ${j.ok ? "ok" : "ng"}">${JOINT_JA[k]} ${j.diff_deg}°</span>`).join("")}</div>`).join("");
+  if (res.ok) {
+    const o = res.opened;
+    $("thenImg").src = o.key_photo_url; $("nowImg").src = o.attempt_photo_url;
+    $("letters").innerHTML = o.contents.map(c => c.type === "message"
+      ? `<div class="letter">${c.text.replace(/[&<>]/g, s => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[s])}</div>`
+      : `<img class="photo" style="margin-top:8px" src="${c.url}">`).join("") || `<div class="status">中身はまだ空でした</div>`;
+    $("openedSec").classList.remove("hidden");
+    $("openedSec").scrollIntoView({ behavior: "smooth" });
+  }
+}
+
+refreshList().catch(() => {});
+</script>
+</body>
+</html>

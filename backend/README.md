@@ -21,6 +21,15 @@ curl -sSfL -o models/pose_landmarker_full.task https://storage.googleapis.com/me
 - `--overlay-dir` に骨格を重ねたプレビューを出力
 - 許容値は `--tolerance 15` のように変えて調整できる
 
+## 1人でテストプレイする
+
+```bash
+.venv/Scripts/python -m uvicorn app.main:app --port 8000
+```
+
+ブラウザで http://localhost:8000/dev を開く（ローカル専用の簡易ページ。カメラで鍵を撮る → メッセージを入れる → ポーズで開ける、が試せる）。
+鍵の写真は両ひじと両手首まで写るように撮る。
+
 ## テスト
 
 ```bash

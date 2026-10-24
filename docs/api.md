@@ -87,6 +87,7 @@ await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
 | --- | --- | --- |
 | 422 | `no_person` | 人が写っていない → 別の写真を選ぶ |
 | 422 | `too_many_people` | 5人以上 → 4人までの写真を選ぶ（`detected_people` 付き） |
+| 422 | `pose_not_visible` | 腕が写っていないなどで、比べられる関節が1人4つ未満 → ひじと手首まで写る写真にする |
 | 404 | `upload_not_found` | PUT が終わる前に呼んだ |
 
 #### GET /capsules — 一覧
@@ -199,6 +200,8 @@ await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
 }
 ```
 
+- 当時の写真で写っていた関節だけを比べる。上半身だけの写真が鍵なら上半身だけで開けられ、全身の写真が鍵なら今も全身（ひざまで）写っている必要がある。足りないときは `reason: "body_not_visible"` と、各人の `missing_joints`（写っていない関節）を返す
+- 肩の角度は「肩のラインに垂直な下向き」と上腕のなす角（腕を下ろして0度、水平で90度、真上で180度）。腰が写っていなくても測れる
 - 5回失敗すると10分ロック。失敗に数えるのは `count_mismatch` と `pose_mismatch` だけ（誰も写っていない・体が切れているのは数えない）
 - 開封済みのカプセルも再び開けられる。開けるたびに認証アルバムに写真が増える（F-7）
 
@@ -233,7 +236,7 @@ await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
 | 404 | `capsule_not_found` `upload_not_found` |
 | 409 | `not_open_yet` `already_opened` `not_opened` |
 | 413 | `image_too_large` |
-| 422 | `no_person` `too_many_people` `validation_error`（`details` 付き） |
+| 422 | `no_person` `too_many_people` `pose_not_visible` `validation_error`（`details` 付き） |
 | 423 | `locked` |
 
 ### ローカルで動かす

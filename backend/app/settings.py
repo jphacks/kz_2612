@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 from functools import lru_cache
+from pathlib import Path
 
 
 def _env(name: str, default: str) -> str:
@@ -38,8 +39,8 @@ class Settings:
 
     cors_origins: tuple[str, ...] = field(default_factory=lambda: ("*",))
 
-    # backend=local のときだけ使う
-    local_data_dir: str = ".local_data"
+    # backend=local のときだけ使う（どこから起動しても backend/.local_data に保存する）
+    local_data_dir: str = str(Path(__file__).resolve().parents[1] / ".local_data")
     public_base_url: str = "http://localhost:8000"
 
     @classmethod

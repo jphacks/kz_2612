@@ -39,7 +39,8 @@ def get_repository() -> Repository:
 @lru_cache
 def get_detector() -> PoseDetector:
     # Lambda ではコンテナが再利用される間、モデルを読み込んだまま使い回す
-    return PoseDetector(min_visibility=get_match_config().min_visibility)
+    config = get_match_config()
+    return PoseDetector(min_visibility=config.min_visibility, min_joints_per_person=config.min_joints_per_person)
 
 
 @lru_cache

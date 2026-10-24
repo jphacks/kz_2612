@@ -123,6 +123,35 @@ def test_joint_missing_in_key_is_skipped():
     assert result.ok
 
 
+def test_upper_body_key_opens_with_upper_body():
+    key = [person(0.5, left_knee=None, right_knee=None)]
+    assert match_poses(key, [person(0.5, left_knee=None, right_knee=None)]).ok
+
+
+def test_full_body_key_needs_knees():
+    # 全身の鍵を、膝の写っていない上半身だけの写真では開けられない
+    result = match_poses([person(0.5)], [person(0.5, left_knee=None, right_knee=None)])
+    assert not result.ok
+    assert result.reason == "body_not_visible"
+    assert result.people[0].missing_joints == ["left_knee", "right_knee"]
+    assert "ひざまで写る" in result.message
+
+
+def test_shoulder_angle_without_hips():
+    from app.pose.angles import shoulder_angle
+
+    s, other = np.array([0.0, 0.0]), np.array([-10.0, 0.0])  # 右に向かって左肩→右肩
+    assert shoulder_angle(np.array([0.0, 10.0]), s, other) == pytest.approx(0.0)    # 腕を下ろす
+    assert shoulder_angle(np.array([10.0, 0.0]), s, other) == pytest.approx(90.0)   # 水平
+    assert shoulder_angle(np.array([0.0, -10.0]), s, other) == pytest.approx(180.0)  # 真上
+    # 腰（23, 24）が見えていなくても肩の角度が出る
+    lms = [Landmark(0.5, 0.5) for _ in range(33)]
+    lms[11], lms[12], lms[13] = Landmark(0.6, 0.3), Landmark(0.4, 0.3), Landmark(0.7, 0.3)
+    lms[23] = Landmark(0.6, 0.9, visibility=0.0)
+    lms[24] = Landmark(0.4, 0.9, visibility=0.0)
+    assert person_pose_from_landmarks(lms, 100, 100).angles["left_shoulder"] == pytest.approx(90.0)
+
+
 def test_roundtrip_dict():
     p = person(0.42, left_knee=None)
     assert PersonPose.from_dict(p.to_dict()).angles == p.angles
