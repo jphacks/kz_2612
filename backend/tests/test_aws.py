@@ -77,6 +77,15 @@ def test_repository_on_dynamodb(aws):
     assert repo.list_contents("c1") == []
     assert repo.get_content("c1", "x") is None
 
+    # フォルダの削除: パーティションの全件と、別パーティションの招待・解除セッションも消える
+    repo.add_attempt_ref("c1", "uploads/alice/attempt/a.jpg", "2026-10-24T00:00:00+00:00")
+    items = repo.delete_capsule("c1")
+    assert {i["entity"] for i in items} >= {"Capsule", "Member", "InviteRef", "SessionRef", "AttemptRef"}
+    assert repo.get_capsule("c1") is None
+    assert repo.get_invite("t0k3n") is None
+    assert repo.get_unlock_session("s3ss") is None
+    assert repo.list_memberships("alice") == []
+
 
 def test_s3_storage(aws):
     storage = S3Storage("emo-bucket", REGION)

@@ -355,6 +355,10 @@ def open_capsule(
         if not face_result.ok:
             result.ok, result.reason, result.message = False, face_result.reason, face_result.message
 
+    if not result.ok:
+        # 開けられなかったときの撮影画像も、フォルダを消すときに一緒に消せるよう記録しておく
+        repo.add_attempt_ref(capsule_id, body.s3_key, _now().isoformat())
+
     fields: dict = {}
     fail_count = capsule.get("fail_count", 0)
     if result.ok:
@@ -481,7 +485,7 @@ def get_album(
     "/{capsule_id}/contents/{content_id}",
     status_code=204,
     responses=UNLOCK_ERRORS,
-    summary="中身を削除（解除中のみ。追加した本人か作成者）",
+    summary="中身を削除（解除中のみ。フォルダの参加者なら誰の写真でも消せる）",
 )
 def delete_content(
     capsule_id: str,
@@ -491,15 +495,52 @@ def delete_content(
     repo: Repository = Depends(get_repository),
     storage: Storage = Depends(get_storage),
 ) -> Response:
-    _, member = _get_capsule_for_member(repo, capsule_id, user["user_id"])
+    _get_capsule_for_member(repo, capsule_id, user["user_id"])
     _require_unlock(repo, capsule_id, user["user_id"], x_unlock_token)
     content = repo.get_content(capsule_id, content_id)
     if content is None:
         raise ApiError(404, "content_not_found", "その写真は見つからなかったよ。もう消えているかも")
-    if content["author_id"] != user["user_id"] and member["role"] != "owner":
-        raise ApiError(403, "not_author", "消せるのは、追加した本人かカプセルを作った人だけだよ")
+    # 共有フォルダなので、参加者なら誰が追加した写真でも消せる
     repo.delete_content(content)
     if content.get("s3_key"):
         storage.delete(content["s3_key"])
     log.info(json.dumps({"event": "content_deleted", "capsule_id": capsule_id}))
+    return Response(status_code=204)
+
+
+# フォルダを消すとき、アイテムのどの項目に画像（S3）のキーが入っているか
+_S3_KEY_FIELDS = {
+    "Capsule": ("key_photo_key", "preview_key"),
+    "Content": ("s3_key",),
+    "OpenRecord": ("photo_key",),
+    "AttemptRef": ("s3_key",),
+}
+
+
+@router.delete(
+    "/{capsule_id}",
+    status_code=204,
+    responses=ERRORS,
+    summary="フォルダを削除（参加者なら誰でも）。鍵の写真・中身・認証まわりのデータをすべて消す",
+)
+def delete_capsule(
+    capsule_id: str,
+    user: dict = Depends(current_user),
+    repo: Repository = Depends(get_repository),
+    storage: Storage = Depends(get_storage),
+) -> Response:
+    _get_capsule_for_member(repo, capsule_id, user["user_id"])
+    # DynamoDB: フォルダ本体（鍵のポーズ・顔の記憶）、メンバー、中身、開封記録、撮影の記録、招待、解除セッション
+    items = repo.delete_capsule(capsule_id)
+    # S3: 鍵の写真、骨格プレビュー、中身の写真、開けたとき・開けられなかったときの撮影画像
+    keys = {item[f] for item in items for f in _S3_KEY_FIELDS.get(item.get("entity", ""), ()) if item.get(f)}
+    failed = 0
+    for key in keys:
+        try:
+            storage.delete(key)
+        except Exception:  # 1つ消せなくても残りは消す（バケットは非公開なので見られることはない）
+            failed += 1
+            log.exception("failed to delete s3 object")
+    log.info(json.dumps({"event": "capsule_deleted", "capsule_id": capsule_id,
+                         "items": len(items), "objects": len(keys), "failed_objects": failed}))
     return Response(status_code=204)
