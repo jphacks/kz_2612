@@ -1,9 +1,44 @@
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { App } from './App'
 
 describe('App routes', () => {
+  beforeEach(() => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => [
+          {
+            capsule_id: 'summer-2026',
+            name: '夏合宿 2026',
+            open_date: null,
+            days_until_open: null,
+            status: 'locked',
+            people_count: 4,
+            role: 'owner',
+          },
+          {
+            capsule_id: 'after-school',
+            name: '放課後メモリーズ',
+            open_date: null,
+            days_until_open: null,
+            status: 'opened',
+            people_count: 3,
+            role: 'member',
+          },
+        ],
+      }),
+    )
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    sessionStorage.clear()
+  })
+
   it('shows the login screen', () => {
     render(
       <MemoryRouter initialEntries={['/login']}>
@@ -12,11 +47,11 @@ describe('App routes', () => {
     )
 
     expect(
-      screen.getByRole('button', { name: 'Googleでログイン' }),
+      screen.getByRole('button', { name: '開発用アカウントで進む' }),
     ).toBeInTheDocument()
   })
 
-  it('shows participating folders', () => {
+  it('shows participating folders returned by the API', async () => {
     render(
       <MemoryRouter initialEntries={['/folders']}>
         <App />
@@ -24,7 +59,7 @@ describe('App routes', () => {
     )
 
     expect(screen.getByRole('heading', { name: '思い出フォルダ' })).toBeInTheDocument()
-    expect(screen.getByText('夏合宿 2026')).toBeInTheDocument()
-    expect(screen.getByText('放課後メモリーズ')).toBeInTheDocument()
+    expect(await screen.findByText('夏合宿 2026')).toBeInTheDocument()
+    expect(await screen.findByText('放課後メモリーズ')).toBeInTheDocument()
   })
 })

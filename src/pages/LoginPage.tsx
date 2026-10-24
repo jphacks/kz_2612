@@ -54,8 +54,9 @@ export function LoginPage() {
         <div className="login-actions">
           <Button fullWidth variant="secondary" onClick={() => navigate('/folders')}>
             <GoogleMark />
-            Googleでログイン
+            開発用アカウントで進む
           </Button>
+          <small className="development-note">Googleログインはバックエンド実装待ちです</small>
           <p>ログインすると利用規約とプライバシーポリシーに同意したことになります</p>
         </div>
 

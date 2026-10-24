@@ -37,21 +37,30 @@
 
 ## フロントエンド開発
 
-スマートフォン向けのReact + TypeScript + Viteアプリです。現在はモックデータで主要画面と画面遷移を確認できます。
+スマートフォン向けのReact + TypeScript + Viteアプリです。FastAPIバックエンドと接続し、フォルダ一覧・作成・写真認証・写真一覧・追加・削除を操作できます。
 
 ### 必要環境
 
 - Node.js 20以上
 - pnpm 11以上
 
-### 起動
+### ローカル起動
+
+バックエンドを先に起動します。初回セットアップと姿勢推定モデルの準備は [backend/README.md](backend/README.md) を参照してください。
+
+~~~bash
+cd backend
+.venv/Scripts/python -m app.dev
+~~~
+
+別のターミナルでフロントエンドを起動します。
 
 ~~~bash
 pnpm install
 pnpm dev
 ~~~
 
-表示されたURLをブラウザで開いてください。最初はログイン画面が表示されます。
+http://localhost:5173 をブラウザで開いてください。APIの既定URLは http://localhost:8000 です。変更する場合は .env.example を .env.local にコピーし、VITE_API_BASE_URL を設定します。
 
 ### 確認コマンド
 
@@ -66,10 +75,16 @@ pnpm test
 - /login：ログイン
 - /folders：参加中フォルダ一覧
 - /folders/new：フォルダ作成フロー
-- /folders/summer-2026/unlock：写真認証の開始
-- /folders/summer-2026/camera：写真認証カメラ
-- /folders/summer-2026/photos：写真一覧
-- /folders/summer-2026/upload：写真アップロード
-- /folders/summer-2026/settings：フォルダ情報・削除
+- /folders/:folderId/unlock：写真認証の開始
+- /folders/:folderId/camera：写真認証カメラ
+- /folders/:folderId/photos：写真一覧
+- /folders/:folderId/upload：写真アップロード
+- /folders/:folderId/settings：フォルダ情報
 
-現時点ではGoogleログイン、API通信、実カメラ、MediaPipe、画像アップロードはモックです。各機能は後続の機能ブランチで接続します。
+### 現在の接続範囲
+
+- API認証はCognito導入前のため、.env.local の VITE_DEMO_USER_ID を X-User-Id として送ります。
+- 写真認証は端末カメラで撮影し、RTMPoseによる最終判定APIへ送ります。
+- 解除トークンはタブの sessionStorage に保存し、更新後も最大12時間維持します。
+- 画像はブラウザでJPEGへ正規化してから、発行されたアップロードURLへ直接PUTします。
+- Googleログイン、MediaPipeによるリアルタイム撮影支援、フォルダ削除は未接続です。
