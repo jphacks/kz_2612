@@ -17,7 +17,7 @@ from PIL import Image
 
 from app.deps import get_detector, get_storage
 from app.errors import ApiError, install_error_handlers
-from app.routers import capsules, uploads
+from app.routers import capsules, invites, uploads
 from app.settings import get_settings
 from app.storage import LocalStorage
 
@@ -38,6 +38,7 @@ app.add_middleware(
 install_error_handlers(app)
 app.include_router(uploads.router)
 app.include_router(capsules.router)
+app.include_router(invites.router)
 
 
 @app.get("/health", tags=["system"], summary="死活確認")

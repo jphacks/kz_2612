@@ -60,6 +60,15 @@ def test_repository_on_dynamodb(aws):
     assert [c["text"] for c in repo.list_contents("c1")] == ["おめでとう"]
     assert repo.list_open_records("c1") == []
 
+    repo.add_member("c1", "bob", "member", "bob@example.com")
+    assert [m["user_id"] for m in repo.list_members("c1")] == ["alice", "bob"]
+    repo.create_invite({"token": "t0k3n", "capsule_id": "c1", "created_by": "alice",
+                        "created_at": "2026-10-24T00:00:00+00:00", "expires_at": "2026-11-07T00:00:00+00:00"})
+    assert repo.get_invite("t0k3n")["capsule_id"] == "c1"
+    assert repo.get_invite("nope") is None
+    # 招待はカプセルとは別のパーティションなので、カプセル配下の検索には出てこない
+    assert repo.list_contents("c1")[0]["text"] == "おめでとう"
+
 
 def test_s3_storage(aws):
     storage = S3Storage("emo-bucket", REGION)

@@ -18,7 +18,7 @@
 | ベースURL | ローカル `http://localhost:8000` ／ 本番は API Gateway の URL |
 | 形式 | JSON（`Content-Type: application/json`） |
 | 日付 | 開封日は `YYYY-MM-DD`（日本時間）。日時は ISO 8601（UTC） |
-| 認証 | Cognito 導入までは `X-User-Id` ヘッダーでユーザーを指定（無ければ `demo-user`）。メンバー招待が未実装なので、デモは同じ ID で操作する |
+| 認証 | Cognito 導入までは `X-User-Id` ヘッダーでユーザーを指定（無ければ `demo-user`）。メールアドレスは `X-User-Email`（任意） |
 
 ### 画像のアップロード（全画像共通の2ステップ）
 
@@ -54,6 +54,10 @@ await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
 | POST | `/capsules/{id}/open` | エモ認証で開封 | 5 → 6. 開封演出 |
 | GET | `/capsules/{id}/contents` | 開封済みの中身を見直す | 6 |
 | GET | `/capsules/{id}/album` | 認証アルバム | 7 |
+| POST | `/capsules/{id}/invites` | 招待リンクを発行（作成者のみ） | 3 |
+| GET | `/invites/{token}` | 招待の中身を確認（参加前） | 招待ページ |
+| POST | `/invites/{token}/accept` | 招待から参加 | 招待ページ |
+| GET | `/capsules/{id}/members` | メンバー一覧 | 3, 4 |
 | GET | `/health` | 死活確認 | — |
 | POST | `/warmup` | モデルを温める（発表直前に叩く） | — |
 
@@ -221,6 +225,65 @@ await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
 { "key_photo_url": "https://...", "entries": [ { "opened_at": "...", "photo_url": "https://...", "score": 91 } ], "url_expires_in": 60 }
 ```
 
+### メンバー招待（F-3）
+
+作成者が招待リンクを発行 → 受け取った人がリンクを開いてログイン → 「参加する」でメンバーになる。
+メンバーは中身の追加・開封・アルバムの閲覧ができる（招待リンクの発行は作成者だけ）。
+
+**招待リンクの URL はフロントで組み立てる**：`https://<フロントのURL>/invite/{token}` のようなページを作り、そのページで下の GET → POST を呼ぶ。
+
+- リンクは期限（14日）まで何人でも使える（結婚式のゲスト全員に同じリンクを配る想定）
+- メンバーの人数に上限はない。開けるときに揃う必要があるのは、鍵の写真に写っている人数（`people_count`）
+- 開封後のカプセルには参加できない（リンクを知っているだけで中身が見られないように）
+
+#### POST /capsules/{id}/invites — 招待リンクを発行（作成者のみ）
+
+```json
+// 201
+{ "token": "_UjqeDeIX8y3iyMOTTYcPQ", "expires_at": "2026-11-07T03:40:00Z" }
+```
+
+| エラー | code | 意味 |
+| --- | --- | --- |
+| 403 | `not_owner` | 作成者以外が発行しようとした |
+| 409 | `already_opened` | 開封済み |
+
+#### GET /invites/{token} — 招待の中身を確認（参加前でも見られる）
+
+招待ページを開いたときに呼ぶ。写真や中身は返さない。
+
+```json
+{
+  "capsule_id": "a1b2c3d4e5f6",
+  "capsule_name": "成人式",
+  "open_date": "2036-01-12",
+  "days_until_open": 3367,
+  "people_count": 4,          // 開けるときに揃う人数
+  "members_count": 3,
+  "invited_by": "user-123",
+  "expires_at": "2026-11-07T03:40:00Z",
+  "already_member": false     // true なら「参加する」ではなくカプセルへのリンクを出す
+}
+```
+
+#### POST /invites/{token}/accept — 参加する
+
+200 でカプセルの一覧と同じ形（`CapsuleSummary`、`role: "member"`）を返す。すでにメンバーなら何もせず同じ形を返す（2回押してもエラーにならない）。
+
+| エラー | code | 意味 |
+| --- | --- | --- |
+| 404 | `invite_not_found` | リンクが間違っている |
+| 410 | `invite_expired` | 期限切れ → 作成者に新しいリンクをもらう |
+| 409 | `already_opened` | もう開封されたカプセル |
+
+#### GET /capsules/{id}/members — メンバー一覧
+
+```json
+[ { "user_id": "alice", "role": "owner", "email": "alice@example.com" }, { "user_id": "bob", "role": "member", "email": null } ]
+```
+
+`email` は、ログイン時のメールアドレス（いまは `X-User-Email` ヘッダー。Cognito 導入後は自動）。開封日の通知に使う予定。
+
 ### エラーの形（全API共通）
 
 ```json
@@ -232,9 +295,10 @@ await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
 | status | code |
 | --- | --- |
 | 400 | `invalid_s3_key` `invalid_image` `text_required` `s3_key_required` |
-| 403 | `not_member` |
-| 404 | `capsule_not_found` `upload_not_found` |
+| 403 | `not_member` `not_owner` |
+| 404 | `capsule_not_found` `upload_not_found` `invite_not_found` |
 | 409 | `not_open_yet` `already_opened` `not_opened` |
+| 410 | `invite_expired` |
 | 413 | `image_too_large` |
 | 422 | `no_person` `too_many_people` `pose_not_visible` `validation_error`（`details` 付き） |
 | 423 | `locked` |
@@ -286,6 +350,7 @@ docker run --rm -p 9000:8080 -e EMO_BUCKET=... -e EMO_TABLE=... -e AWS_REGION=ap
 | `EMO_TABLE` | ✓ | `emo-timecapsule` | DynamoDB テーブル名 |
 | `EMO_CORS_ORIGINS` | ✓ | `https://main.xxxx.amplifyapp.com,http://localhost:5173` | API の CORS 許可オリジン（カンマ区切り） |
 | `EMO_IGNORE_OPEN_DATE` | | `false` | デモ時は `true` で開封日前でも開けられる |
+| `EMO_INVITE_DAYS` | | `14` | 招待リンクの有効期限（日） |
 | `EMO_TOLERANCE_DEG` | | `20` | 判定の許容値（度） |
 | `EMO_MAX_FAILURES` / `EMO_LOCK_MINUTES` | | `5` / `10` | 失敗回数とロック時間 |
 | `EMO_DETECTION_CONFIDENCE` | | `0.2` | 人物検出のしきい値 |
@@ -314,6 +379,7 @@ docker run --rm -p 9000:8080 -e EMO_BUCKET=... -e EMO_TABLE=... -e AWS_REGION=ap
 | Member | `CAPSULE#{id}` | `MEMBER#{userId}` | `USER#{userId}` | `CAPSULE#{id}` |
 | Content | `CAPSULE#{id}` | `CONTENT#{createdAt}#{cid}` | | |
 | OpenRecord | `CAPSULE#{id}` | `OPEN#{openedAt}` | | |
+| Invite | `INVITE#{token}` | `META` | | |
 
 ```bash
 aws dynamodb create-table --table-name emo-timecapsule \
@@ -388,6 +454,5 @@ aws dynamodb create-table --table-name emo-timecapsule \
 
 | 機能 | 状態 |
 | --- | --- |
-| メンバー招待（招待リンク） | 未実装。次に `POST /capsules/{id}/invites` と `POST /invites/{token}/accept` を追加予定 |
 | Cognito（Googleログイン） | 未実装。いまは `X-User-Id` ヘッダーで代替 |
 | 開封日の通知（EventBridge Scheduler＋SES） | 未実装（PRD でも優先度低） |

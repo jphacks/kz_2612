@@ -6,6 +6,7 @@
 | Member       | CAPSULE#{id}    | MEMBER#{userId}             | USER#{userId} | CAPSULE#{id}     |
 | Content      | CAPSULE#{id}    | CONTENT#{createdAt}#{cid}   |               |                  |
 | OpenRecord   | CAPSULE#{id}    | OPEN#{openedAt}             |               |                  |
+| Invite       | INVITE#{token}  | META                        |               |                  |
 
 ItemStore が「アイテムの読み書き」だけを担当し、Repository はその上で共通に動く。
 ローカルでは JSON ファイル、AWS では DynamoDB の ItemStore を使う。
@@ -170,6 +171,9 @@ class Repository:
     def get_member(self, capsule_id: str, user_id: str) -> dict | None:
         return _strip(self.store.get(f"CAPSULE#{capsule_id}", f"MEMBER#{user_id}"))
 
+    def list_members(self, capsule_id: str) -> list[dict]:
+        return [_strip(i) for i in self.store.query(f"CAPSULE#{capsule_id}", "MEMBER#")]  # type: ignore[misc]
+
     def list_memberships(self, user_id: str) -> list[dict]:
         return [_strip(i) for i in self.store.query_gsi1(f"USER#{user_id}")]  # type: ignore[misc]
 
@@ -193,3 +197,10 @@ class Repository:
 
     def list_open_records(self, capsule_id: str) -> list[dict]:
         return [_strip(i) for i in self.store.query(f"CAPSULE#{capsule_id}", "OPEN#")]  # type: ignore[misc]
+
+    # Invite（招待リンク）。トークンだけで引けるよう、カプセルとは別のパーティションに置く
+    def create_invite(self, invite: dict) -> None:
+        self.store.put({"PK": f"INVITE#{invite['token']}", "SK": "META", "entity": "Invite", **invite})
+
+    def get_invite(self, token: str) -> dict | None:
+        return _strip(self.store.get(f"INVITE#{token}", "META"))
