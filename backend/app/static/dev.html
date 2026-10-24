@@ -33,6 +33,10 @@
   .status { font-size:13px; color:var(--sub); margin-top:8px; min-height:1.4em; }
   .error { color: var(--ng); }
   .letters { margin-top:12px; }
+  .grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap:8px; margin-top:12px; }
+  .tile { position:relative; }
+  .tile img { width:100%; aspect-ratio:1; object-fit:cover; border-radius:8px; display:block; }
+  .tile button { position:absolute; top:4px; right:4px; margin:0; padding:2px 9px; font-size:12px; background:#000a; }
   .letter { background:#fff7ef; border:1px solid #f1dcc7; border-radius:10px; padding:10px 14px; margin-top:8px; white-space:pre-wrap; }
   .caption { text-align:center; font-size:13px; color:var(--sub); margin-top:4px; }
   .hidden { display:none !important; }
@@ -73,7 +77,7 @@
         </div>
         <label>カプセル名</label>
         <input id="capName" type="text" value="テストカプセル">
-        <label>開封日</label>
+        <label>開封日（任意。空ならいつでも開けられる）</label>
         <input id="openDate" type="date">
         <button id="createBtn">カプセルを作る</button>
         <div class="status" id="createStatus"></div>
@@ -121,7 +125,17 @@
       <div><img id="thenImg" class="photo" alt="当時"><div class="caption">あの日</div></div>
       <div><img id="nowImg" class="photo" alt="今"><div class="caption">今日</div></div>
     </div>
+  </section>
+
+  <section id="librarySec" class="hidden">
+    <h2>⑤ 写真ライブラリ</h2>
+    <p class="lead" style="margin:0" id="unlockInfo"></p>
+    <div class="grid" id="library"></div>
     <div class="letters" id="letters"></div>
+    <label>写真を追加</label>
+    <input id="addFile" type="file" accept="image/*" multiple>
+    <button id="addBtn">追加する</button>
+    <div class="status" id="libStatus"></div>
   </section>
 </main>
 
@@ -133,7 +147,6 @@ const JOINT_JA = { left_elbow:"左ひじ", right_elbow:"右ひじ", left_shoulde
 const BONES = [["left_shoulder","right_shoulder"],["left_shoulder","left_elbow"],["left_elbow","left_wrist"],["right_shoulder","right_elbow"],["right_elbow","right_wrist"],["left_shoulder","left_hip"],["right_shoulder","right_hip"],["left_hip","right_hip"],["left_hip","left_knee"],["left_knee","left_ankle"],["right_hip","right_knee"],["right_knee","right_ankle"]];
 let stream = null, current = null;
 
-$("openDate").value = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
 
 async function api(path, opts = {}) {
   const res = await fetch(API + path, { headers: headers(), ...opts });
@@ -196,7 +209,7 @@ async function refreshList(selectId) {
   if (stale(user)) return;
   if (!list.length) { current = null; $("capSelect").innerHTML = ""; $("members").textContent = "（カプセルがまだありません）"; drawGuide(); return; }
   $("capSelect").innerHTML = list.map(c =>
-    `<option value="${c.capsule_id}">${c.name}（${c.people_count}人・${c.status === "opened" ? "開封済み" : "あと" + c.days_until_open + "日"}）</option>`).join("");
+    `<option value="${c.capsule_id}">${c.name}（${c.people_count}人・${c.days_until_open === null ? "いつでも" : "あと" + c.days_until_open + "日"}）</option>`).join("");
   if (selectId) $("capSelect").value = selectId;
   if (list.length) await loadCapsule($("capSelect").value);
 }
@@ -206,6 +219,11 @@ async function loadCapsule(id) {
   const detail = await api(`/capsules/${id}`);
   const members = await api(`/capsules/${id}/members`);
   if (stale(user)) return;
+  // 別のカプセルに移ったら、解除はやり直し
+  if (!current || current.capsule_id !== detail.capsule_id) {
+    unlockToken = null;
+    $("openedSec").classList.add("hidden"); $("librarySec").classList.add("hidden");
+  }
   current = detail;
   $("members").textContent = members.map(m => m.user_id + (m.role === "owner" ? "（作成者）" : "")).join("、");
   $("inviteBtn").classList.toggle("hidden", current.role !== "owner");
@@ -298,7 +316,9 @@ $("createBtn").onclick = async () => {
     if (!blob) throw new Error("写真を選ぶか、カメラで撮ってね");
     st.textContent = "ポーズを読み取っています…";
     const key = await upload("key", blob);
-    const cap = await api("/capsules", { method: "POST", body: JSON.stringify({ name: $("capName").value, open_date: $("openDate").value, key_photo_s3_key: key }) });
+    const body = { name: $("capName").value, key_photo_s3_key: key };
+    if ($("openDate").value) body.open_date = $("openDate").value;
+    const cap = await api("/capsules", { method: "POST", body: JSON.stringify(body) });
     $("preview").src = cap.preview_url; $("preview").classList.remove("hidden");
     st.textContent = `作成しました（${cap.people_count}人を検出）`;
     window._keyBlob = null;
@@ -360,13 +380,66 @@ function showResult(res) {
   if (res.ok) {
     const o = res.opened;
     $("thenImg").src = o.key_photo_url; $("nowImg").src = o.attempt_photo_url;
-    $("letters").innerHTML = o.contents.map(c => c.type === "message"
-      ? `<div class="letter">${c.text.replace(/[&<>]/g, s => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[s])}</div>`
-      : `<img class="photo" style="margin-top:8px" src="${c.url}">`).join("") || `<div class="status">中身はまだ空でした</div>`;
     $("openedSec").classList.remove("hidden");
+    unlockToken = res.unlock.token;
+    $("unlockInfo").textContent = `ロック解除中（${new Date(res.unlock.expires_at).toLocaleTimeString()} まで）`;
+    renderLibrary(o.contents);
+    $("librarySec").classList.remove("hidden");
     $("openedSec").scrollIntoView({ behavior: "smooth" });
   }
 }
+
+// ライブラリ：解除で受け取ったトークンを X-Unlock-Token に付ける
+let unlockToken = null;
+const esc = (t) => t.replace(/[&<>"]/g, s => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[s]);
+function libApi(path, opts = {}) {
+  return fetch(API + path, { ...opts, headers: { ...headers(), "X-Unlock-Token": unlockToken || "" } }).then(async (res) => {
+    if (res.status === 204) return null;
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.error ? body.error.message : `HTTP ${res.status}`);
+    return body;
+  });
+}
+
+function renderLibrary(contents) {
+  const me = headers()["X-User-Id"], owner = current && current.role === "owner";
+  const photos = contents.filter(c => c.type === "photo");
+  $("library").innerHTML = photos.map(c => `
+    <div class="tile"><img src="${c.url}" alt="">${
+      (owner || c.author_id === me) ? `<button data-id="${c.content_id}">削除</button>` : ""}</div>`).join("")
+    || `<div class="status">写真はまだありません</div>`;
+  $("letters").innerHTML = contents.filter(c => c.type === "message").map(c => `<div class="letter">${esc(c.text)}</div>`).join("");
+}
+
+async function reloadLibrary() {
+  const o = await libApi(`/capsules/${current.capsule_id}/contents`);
+  renderLibrary(o.contents);
+}
+
+$("library").onclick = async (e) => {
+  const id = e.target.dataset && e.target.dataset.id;
+  if (!id || !confirm("本当に削除しますか？")) return;
+  try {
+    await libApi(`/capsules/${current.capsule_id}/contents/${id}`, { method: "DELETE" });
+    $("libStatus").textContent = "削除しました";
+    await reloadLibrary();
+  } catch (err) { $("libStatus").innerHTML = `<span class="error">${err.message}</span>`; }
+};
+
+$("addBtn").onclick = async () => {
+  const files = [...$("addFile").files];
+  if (!files.length) { $("libStatus").textContent = "写真を選んでね"; return; }
+  try {
+    for (const [i, f] of files.entries()) {
+      $("libStatus").textContent = `アップロード中…（${i + 1}/${files.length}）`;
+      const key = await upload("content", await toJpeg(f));
+      await api(`/capsules/${current.capsule_id}/contents`, { method: "POST", body: JSON.stringify({ type: "photo", s3_key: key }) });
+    }
+    $("addFile").value = "";
+    $("libStatus").textContent = `${files.length}枚追加しました`;
+    await reloadLibrary();
+  } catch (err) { $("libStatus").innerHTML = `<span class="error">${err.message}</span>`; }
+};
 
 refreshList().catch(() => {});
 showInvite();

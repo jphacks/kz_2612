@@ -1,4 +1,8 @@
-"""カプセルの作成（鍵の抽出）・中身の登録・エモ認証による開封・認証アルバム。"""
+"""カプセルの作成（鍵の抽出）・中身の登録・エモ認証による開封・ライブラリ・認証アルバム。
+
+カプセルは「ポーズで開ける共有アルバム」。ポーズが一致すると解除セッション（X-Unlock-Token）を発行し、
+その間だけライブラリ（中身の閲覧・削除、認証アルバム）を使える。入るたびにポーズで解除する。
+"""
 
 from __future__ import annotations
 
@@ -6,10 +10,11 @@ import datetime as dt
 import io
 import json
 import logging
+import secrets
 import time
 import uuid
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Header, Response
 from PIL import Image
 
 from app.deps import current_user, get_detector, get_match_config, get_repository, get_storage, settings_dep
@@ -34,6 +39,7 @@ from app.schemas import (
     OpenedContents,
     OpenRequest,
     OpenResponse,
+    UnlockSession,
 )
 from app.settings import Settings
 from app.storage import Storage
@@ -50,6 +56,7 @@ ERRORS = {
     403: {"model": ErrorResponse},
     404: {"model": ErrorResponse},
 }
+UNLOCK_ERRORS = {**ERRORS, 401: {"model": ErrorResponse}}
 
 
 def _now() -> dt.datetime:
@@ -93,13 +100,21 @@ def _locked_until(capsule: dict) -> dt.datetime | None:
     return until if until and until > _now() else None
 
 
+def _open_date(capsule: dict) -> dt.date | None:
+    return dt.date.fromisoformat(capsule["open_date"]) if capsule.get("open_date") else None
+
+
+def _days_until(open_date: dt.date | None) -> int | None:
+    return None if open_date is None else max(0, (open_date - _today_jst()).days)
+
+
 def _summary(capsule: dict, role: str) -> CapsuleSummary:
-    open_date = dt.date.fromisoformat(capsule["open_date"])
+    open_date = _open_date(capsule)
     return CapsuleSummary(
         capsule_id=capsule["capsule_id"],
         name=capsule["name"],
         open_date=open_date,
-        days_until_open=max(0, (open_date - _today_jst()).days),
+        days_until_open=_days_until(open_date),
         status=capsule["status"],
         people_count=len(capsule["key_pose"]["people"]),
         role=role,
@@ -107,7 +122,20 @@ def _summary(capsule: dict, role: str) -> CapsuleSummary:
 
 
 def _is_open_day(capsule: dict, settings: Settings) -> bool:
-    return settings.ignore_open_date or _today_jst() >= dt.date.fromisoformat(capsule["open_date"])
+    open_date = _open_date(capsule)
+    return open_date is None or settings.ignore_open_date or _today_jst() >= open_date
+
+
+def _require_unlock(repo: Repository, capsule_id: str, user_id: str, token: str | None) -> dict:
+    """ポーズで解除した後の閲覧セッションを確かめる。トークンは解除した本人・そのカプセルにだけ有効。"""
+    if not token:
+        raise ApiError(401, "unlock_required", "みんなでポーズをそろえて、ロックを解除してね")
+    session = repo.get_unlock_session(token)
+    if session is None or session["capsule_id"] != capsule_id or session["user_id"] != user_id:
+        raise ApiError(401, "unlock_required", "みんなでポーズをそろえて、ロックを解除してね")
+    if _parse_dt(session["expires_at"]) <= _now():
+        raise ApiError(401, "unlock_expired", "解除の時間が終わったよ。もう一度ポーズでロックを解除してね")
+    return session
 
 
 def _detail(capsule: dict, role: str, repo: Repository, storage: Storage, settings: Settings) -> CapsuleDetail:
@@ -161,7 +189,7 @@ def create_capsule(
         "capsule_id": capsule_id,
         "name": body.name,
         "owner_id": user["user_id"],
-        "open_date": body.open_date.isoformat(),
+        "open_date": body.open_date.isoformat() if body.open_date else None,
         "key_photo_key": body.key_photo_s3_key,
         "preview_key": preview_key,
         # 鍵として保存するのは関節角度と体の点の座標だけ（顔の特徴は保存しない）
@@ -185,7 +213,8 @@ def list_capsules(user: dict = Depends(current_user), repo: Repository = Depends
         capsule = repo.get_capsule(m["capsule_id"])
         if capsule:
             summaries.append(_summary(capsule, m["role"]))
-    return sorted(summaries, key=lambda s: s.open_date)
+    # 開封日の近い順。開封日のないカプセルは後ろ
+    return sorted(summaries, key=lambda s: (s.open_date is None, s.open_date or dt.date.max))
 
 
 @router.get("/{capsule_id}", response_model=CapsuleDetail, responses=ERRORS, summary="カプセルの詳細（中身は含まない）")
@@ -204,8 +233,8 @@ def get_capsule(
     "/{capsule_id}/contents",
     response_model=ContentMeta,
     status_code=201,
-    responses={**ERRORS, 409: {"model": ErrorResponse}},
-    summary="中身（メッセージ・写真）を追加",
+    responses=ERRORS,
+    summary="中身（写真・メッセージ）を追加（メンバーならいつでも）",
 )
 def add_content(
     capsule_id: str,
@@ -215,9 +244,8 @@ def add_content(
     storage: Storage = Depends(get_storage),
     settings: Settings = Depends(settings_dep),
 ) -> ContentMeta:
-    capsule, _ = _get_capsule_for_member(repo, capsule_id, user["user_id"])
-    if capsule["status"] == "opened":
-        raise ApiError(409, "already_opened", "このカプセルはもう開いたので、中身は追加できないよ")
+    # 追加は中身を見せないので解除は不要（作成時の登録も、解除後のライブラリからの追加もこれを使う）
+    _get_capsule_for_member(repo, capsule_id, user["user_id"])
 
     if body.type == "message":
         if not body.text or not body.text.strip():
@@ -319,7 +347,7 @@ def open_capsule(
         "ms": round((time.perf_counter() - started) * 1000),
     }))
 
-    opened = None
+    opened = unlock = None
     if result.ok:
         expires = settings.view_url_expires
         opened = OpenedContents(
@@ -328,31 +356,38 @@ def open_capsule(
             contents=_content_views(repo, storage, capsule_id, expires),
             url_expires_in=expires,
         )
+        unlock_expires = _now() + dt.timedelta(minutes=settings.unlock_minutes)
+        unlock = UnlockSession(token=secrets.token_urlsafe(24), expires_at=unlock_expires)
+        repo.create_unlock_session({
+            "token": unlock.token, "capsule_id": capsule_id, "user_id": user["user_id"],
+            "expires_at": unlock_expires.isoformat(), "ttl": int(unlock_expires.timestamp()),
+        })
     return OpenResponse(
         ok=result.ok,
         result=result.to_dict(),
         attempts_left=0 if locked_until else settings.max_failures - fail_count,
         locked_until=locked_until,
         opened=opened,
+        unlock=unlock,
     )
 
 
 @router.get(
     "/{capsule_id}/contents",
     response_model=OpenedContents,
-    responses={**ERRORS, 409: {"model": ErrorResponse}},
-    summary="開封済みカプセルの中身を見直す（閲覧URLの再発行）",
+    responses=UNLOCK_ERRORS,
+    summary="ライブラリ（中身の一覧と閲覧URL）。解除中のみ。URLが切れたら呼び直す",
 )
 def list_contents(
     capsule_id: str,
     user: dict = Depends(current_user),
+    x_unlock_token: str | None = Header(default=None),
     repo: Repository = Depends(get_repository),
     storage: Storage = Depends(get_storage),
     settings: Settings = Depends(settings_dep),
 ) -> OpenedContents:
     capsule, _ = _get_capsule_for_member(repo, capsule_id, user["user_id"])
-    if capsule["status"] != "opened":
-        raise ApiError(409, "not_opened", "まだ開いていないカプセルだよ。みんなでポーズをそろえて開けてね")
+    _require_unlock(repo, capsule_id, user["user_id"], x_unlock_token)
     records = repo.list_open_records(capsule_id)
     expires = settings.view_url_expires
     return OpenedContents(
@@ -366,19 +401,19 @@ def list_contents(
 @router.get(
     "/{capsule_id}/album",
     response_model=AlbumResponse,
-    responses={**ERRORS, 409: {"model": ErrorResponse}},
-    summary="認証アルバム（開封に成功したときの写真）",
+    responses=UNLOCK_ERRORS,
+    summary="認証アルバム（開封に成功したときの写真）。解除中のみ",
 )
 def get_album(
     capsule_id: str,
     user: dict = Depends(current_user),
+    x_unlock_token: str | None = Header(default=None),
     repo: Repository = Depends(get_repository),
     storage: Storage = Depends(get_storage),
     settings: Settings = Depends(settings_dep),
 ) -> AlbumResponse:
     capsule, _ = _get_capsule_for_member(repo, capsule_id, user["user_id"])
-    if capsule["status"] != "opened":
-        raise ApiError(409, "not_opened", "まだ開いていないカプセルだよ。みんなでポーズをそろえて開けてね")
+    _require_unlock(repo, capsule_id, user["user_id"], x_unlock_token)
     expires = settings.view_url_expires
     return AlbumResponse(
         key_photo_url=storage.presign_get(capsule["key_photo_key"], expires),
@@ -388,3 +423,31 @@ def get_album(
         ],
         url_expires_in=expires,
     )
+
+
+@router.delete(
+    "/{capsule_id}/contents/{content_id}",
+    status_code=204,
+    responses=UNLOCK_ERRORS,
+    summary="中身を削除（解除中のみ。追加した本人か作成者）",
+)
+def delete_content(
+    capsule_id: str,
+    content_id: str,
+    user: dict = Depends(current_user),
+    x_unlock_token: str | None = Header(default=None),
+    repo: Repository = Depends(get_repository),
+    storage: Storage = Depends(get_storage),
+) -> Response:
+    _, member = _get_capsule_for_member(repo, capsule_id, user["user_id"])
+    _require_unlock(repo, capsule_id, user["user_id"], x_unlock_token)
+    content = repo.get_content(capsule_id, content_id)
+    if content is None:
+        raise ApiError(404, "content_not_found", "その写真は見つからなかったよ。もう消えているかも")
+    if content["author_id"] != user["user_id"] and member["role"] != "owner":
+        raise ApiError(403, "not_author", "消せるのは、追加した本人かカプセルを作った人だけだよ")
+    repo.delete_content(content)
+    if content.get("s3_key"):
+        storage.delete(content["s3_key"])
+    log.info(json.dumps({"event": "content_deleted", "capsule_id": capsule_id}))
+    return Response(status_code=204)

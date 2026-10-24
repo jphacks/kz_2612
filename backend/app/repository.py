@@ -7,6 +7,9 @@
 | Content      | CAPSULE#{id}    | CONTENT#{createdAt}#{cid}   |               |                  |
 | OpenRecord   | CAPSULE#{id}    | OPEN#{openedAt}             |               |                  |
 | Invite       | INVITE#{token}  | META                        |               |                  |
+| UnlockSession| SESSION#{token} | META                        |               |                  |
+
+UnlockSession の ttl（UNIX秒）は DynamoDB の TTL を有効にすると自動で消える（任意）。
 
 ItemStore が「アイテムの読み書き」だけを担当し、Repository はその上で共通に動く。
 ローカルでは JSON ファイル、AWS では DynamoDB の ItemStore を使う。
@@ -25,6 +28,7 @@ class ItemStore(Protocol):
     def put(self, item: dict) -> None: ...
     def get(self, pk: str, sk: str) -> dict | None: ...
     def update(self, pk: str, sk: str, fields: dict) -> dict: ...
+    def delete(self, pk: str, sk: str) -> None: ...
     def query(self, pk: str, sk_prefix: str) -> list[dict]: ...
     def query_gsi1(self, gsi1pk: str) -> list[dict]: ...
 
@@ -74,6 +78,9 @@ class DynamoItemStore:
             ReturnValues="ALL_NEW",
         )
         return _from_dynamo(res["Attributes"])
+
+    def delete(self, pk: str, sk: str) -> None:
+        self.table.delete_item(Key={"PK": pk, "SK": sk})
 
     def _query_all(self, **kwargs) -> list[dict]:
         items, start = [], None
@@ -132,6 +139,11 @@ class JsonItemStore:
             self._save()
             return json.loads(json.dumps(item))
 
+    def delete(self, pk: str, sk: str) -> None:
+        with self._lock:
+            self._items.pop(self._k(pk, sk), None)
+            self._save()
+
     def query(self, pk: str, sk_prefix: str) -> list[dict]:
         items = [i for i in self._items.values() if i["PK"] == pk and i["SK"].startswith(sk_prefix)]
         return sorted(items, key=lambda i: i["SK"])
@@ -188,6 +200,12 @@ class Repository:
     def list_contents(self, capsule_id: str) -> list[dict]:
         return [_strip(i) for i in self.store.query(f"CAPSULE#{capsule_id}", "CONTENT#")]  # type: ignore[misc]
 
+    def get_content(self, capsule_id: str, content_id: str) -> dict | None:
+        return next((c for c in self.list_contents(capsule_id) if c["content_id"] == content_id), None)
+
+    def delete_content(self, content: dict) -> None:
+        self.store.delete(f"CAPSULE#{content['capsule_id']}", f"CONTENT#{content['created_at']}#{content['content_id']}")
+
     # OpenRecord
     def add_open_record(self, record: dict) -> None:
         self.store.put({
@@ -204,3 +222,10 @@ class Repository:
 
     def get_invite(self, token: str) -> dict | None:
         return _strip(self.store.get(f"INVITE#{token}", "META"))
+
+    # UnlockSession（ポーズで解除してからライブラリを使える間の合言葉）
+    def create_unlock_session(self, session: dict) -> None:
+        self.store.put({"PK": f"SESSION#{session['token']}", "SK": "META", "entity": "UnlockSession", **session})
+
+    def get_unlock_session(self, token: str) -> dict | None:
+        return _strip(self.store.get(f"SESSION#{token}", "META"))

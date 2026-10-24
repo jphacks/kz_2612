@@ -24,6 +24,7 @@ class Storage(Protocol):
     def size(self, key: str) -> int | None: ...
     def get_bytes(self, key: str) -> bytes: ...
     def put_bytes(self, key: str, data: bytes, content_type: str) -> None: ...
+    def delete(self, key: str) -> None: ...
 
 
 class S3Storage:
@@ -72,6 +73,9 @@ class S3Storage:
     def put_bytes(self, key: str, data: bytes, content_type: str) -> None:
         self.client.put_object(Bucket=self.bucket, Key=key, Body=data, ContentType=content_type)
 
+    def delete(self, key: str) -> None:
+        self.client.delete_object(Bucket=self.bucket, Key=key)
+
 
 class LocalStorage:
     """ローカル開発用。URL は FastAPI の /local-s3/ に向き、期限と署名を S3 と同じように検証する。"""
@@ -119,3 +123,6 @@ class LocalStorage:
         path = self._path(key)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(data)
+
+    def delete(self, key: str) -> None:
+        self._path(key).unlink(missing_ok=True)

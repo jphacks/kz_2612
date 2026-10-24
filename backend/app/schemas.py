@@ -35,7 +35,7 @@ class UploadResponse(BaseModel):
 
 class CreateCapsuleRequest(BaseModel):
     name: str = Field(min_length=1, max_length=100)
-    open_date: dt.date = Field(description="開封日（日本時間）")
+    open_date: dt.date | None = Field(default=None, description="開封日（日本時間）。省略するといつでも開けられる")
     key_photo_s3_key: str
 
 
@@ -48,9 +48,9 @@ class GuidePerson(BaseModel):
 class CapsuleSummary(BaseModel):
     capsule_id: str
     name: str
-    open_date: dt.date
-    days_until_open: int
-    status: Literal["locked", "opened"]
+    open_date: dt.date | None
+    days_until_open: int | None = Field(description="開封日までの日数。開封日がなければ null")
+    status: Literal["locked", "opened"] = Field(description="opened は一度でも開けたことがある")
     people_count: int
     role: Literal["owner", "member"]
 
@@ -123,12 +123,18 @@ class OpenedContents(BaseModel):
     url_expires_in: int
 
 
+class UnlockSession(BaseModel):
+    token: str = Field(description="ライブラリの API に X-Unlock-Token ヘッダーで付ける")
+    expires_at: dt.datetime
+
+
 class OpenResponse(BaseModel):
     ok: bool
     result: MatchResultOut
     attempts_left: int
     locked_until: dt.datetime | None
     opened: OpenedContents | None = Field(description="ok=true のときだけ入る")
+    unlock: UnlockSession | None = Field(default=None, description="ok=true のときだけ入る。解除中の閲覧セッション")
 
 
 class MemberOut(BaseModel):
@@ -146,8 +152,8 @@ class InvitePreview(BaseModel):
     """招待リンクを開いた人に見せる情報。参加前なので写真や中身は含めない。"""
     capsule_id: str
     capsule_name: str
-    open_date: dt.date
-    days_until_open: int
+    open_date: dt.date | None
+    days_until_open: int | None
     people_count: int = Field(description="鍵の写真に写っている人数（開けるときに揃う必要がある人数）")
     members_count: int
     invited_by: str

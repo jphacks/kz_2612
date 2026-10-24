@@ -1,6 +1,8 @@
-# エモ認証 API 仕様（v0.1）
+# エモ認証 API 仕様（v0.2）
 
 フロントエンド担当・AWS担当向け。実装は `backend/`。
+
+**カプセル（画面ではフォルダ）は「ポーズで開ける共有アルバム」。** フォルダに入るたびにみんなでポーズを揃えてロックを解除し、解除している間だけ写真を見る・追加する・削除する（Figma の画面フローに合わせた）。
 サーバーを起動すると `http://localhost:8000/docs` で同じ内容を試せる（OpenAPI / Swagger UI）。
 
 - [フロントエンド向け](#フロントエンド向け)
@@ -17,8 +19,9 @@
 | --- | --- |
 | ベースURL | ローカル `http://localhost:8000` ／ 本番は API Gateway の URL |
 | 形式 | JSON（`Content-Type: application/json`） |
-| 日付 | 開封日は `YYYY-MM-DD`（日本時間）。日時は ISO 8601（UTC） |
+| 日付 | 開封日は `YYYY-MM-DD`（日本時間、**任意**）。日時は ISO 8601（UTC） |
 | 認証 | Cognito 導入までは `X-User-Id` ヘッダーでユーザーを指定（無ければ `demo-user`）。メールアドレスは `X-User-Email`（任意） |
+| ロック解除 | ポーズが一致すると `unlock.token` が返る。ライブラリの API には `X-Unlock-Token` ヘッダーで付ける（30分有効） |
 
 ### 画像のアップロード（全画像共通の2ステップ）
 
@@ -47,17 +50,35 @@ await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
 | メソッド | パス | 用途 | 画面 |
 | --- | --- | --- | --- |
 | POST | `/uploads` | アップロード用URL発行 | 全般 |
-| POST | `/capsules` | カプセル作成＋鍵のポーズ抽出 | 3. カプセル作成 |
-| GET | `/capsules` | 自分のカプセル一覧 | 2. 一覧 |
-| GET | `/capsules/{id}` | 詳細・開封カメラのガイド | 3, 5 |
-| POST | `/capsules/{id}/contents` | 中身（メッセージ・写真）を追加 | 4. 中身の登録 |
-| POST | `/capsules/{id}/open` | エモ認証で開封 | 5 → 6. 開封演出 |
-| GET | `/capsules/{id}/contents` | 開封済みの中身を見直す | 6 |
-| GET | `/capsules/{id}/album` | 認証アルバム | 7 |
-| POST | `/capsules/{id}/invites` | 招待リンクを発行（作成者のみ） | 3 |
+| POST | `/capsules` | フォルダ作成＋鍵のポーズ抽出 | 作成登録画面 |
+| GET | `/capsules` | 自分のフォルダ一覧 | フォルダー一覧画面 |
+| GET | `/capsules/{id}` | 詳細・写真認証カメラのガイド | 写真認証画面 |
+| POST | `/capsules/{id}/open` | ポーズでロック解除 | 写真を撮る → 認証中/成功/失敗 |
+| GET | `/capsules/{id}/contents` | ライブラリ（写真一覧）🔓 | 写真ライブラリ画面・1枚写真画面 |
+| POST | `/capsules/{id}/contents` | 写真（メッセージ）を追加 | 追加 → アップロード |
+| DELETE | `/capsules/{id}/contents/{content_id}` | 写真を削除 🔓 | 選択 → 削除 |
+| GET | `/capsules/{id}/album` | 認証アルバム（解除した瞬間の写真）🔓 | （フローには未記載） |
+| POST | `/capsules/{id}/invites` | 招待リンクを発行（作成者のみ） | 作成登録画面（参加アカウント） |
 | GET | `/invites/{token}` | 招待の中身を確認（参加前） | 招待ページ |
 | POST | `/invites/{token}/accept` | 招待から参加 | 招待ページ |
-| GET | `/capsules/{id}/members` | メンバー一覧 | 3, 4 |
+| GET | `/capsules/{id}/members` | メンバー一覧 | 作成登録画面 |
+
+🔓 はロック解除中だけ使える（`X-Unlock-Token` が必要）。
+
+#### 画面フローとの対応
+
+```
+フォルダー一覧  GET /capsules
+ ├ フォルダ新規作成 → 作成登録画面   POST /uploads(key) → POST /capsules → POST /capsules/{id}/invites
+ └ フォルダ押下 → 写真認証画面       GET /capsules/{id}（guide でガイド表示）
+     └ 写真を撮る                    POST /uploads(attempt) → POST /capsules/{id}/open
+         ├ 失敗 → result.message を表示して撮り直し
+         └ 成功 → unlock.token を保存 → 写真ライブラリ画面
+             ├ 一覧・1枚表示         GET /capsules/{id}/contents   （X-Unlock-Token）
+             ├ 追加 → アップロード    POST /uploads(content) → POST /capsules/{id}/contents
+             ├ 選択 → 削除           DELETE /capsules/{id}/contents/{content_id}（X-Unlock-Token）
+             └ 戻る → トークンを捨てる（次に入るときはまたポーズで解除）
+```
 | GET | `/health` | 死活確認 | — |
 | POST | `/warmup` | モデルを温める（発表直前に叩く） | — |
 
@@ -84,6 +105,8 @@ await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
 // request
 { "name": "成人式", "open_date": "2036-01-12", "key_photo_s3_key": "uploads/demo-user/key/3f2a....jpg" }
 ```
+
+`open_date` は省略できる（省略するといつでも開けられる。一覧・詳細では `open_date` と `days_until_open` が `null`）。
 
 201 で下の「カプセル詳細」を返す。`preview_url` が骨格を重ねたプレビュー画像。
 
@@ -146,14 +169,15 @@ await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
 - 左右は「写っている本人から見た左右」（MediaPipe と同じ）
 - 署名付きURLは60秒で切れるので、表示し直すときは詳細を取り直す
 
-#### POST /capsules/{id}/contents — 中身の追加（F-3）
+#### POST /capsules/{id}/contents — 写真・メッセージの追加
 
 ```json
 { "type": "message", "text": "10年後のみんなへ" }
 { "type": "photo", "s3_key": "uploads/demo-user/content/....jpg" }
 ```
 
-201 で `{ content_id, type, author_id, created_at }`。開封後は 409 `already_opened`。
+201 で `{ content_id, type, author_id, created_at }`。メンバーならいつでも追加できる（解除は不要。作成時の登録にも、ライブラリからの追加にも使う）。
+追加したあとライブラリを表示し直すときは `GET /capsules/{id}/contents` を呼ぶ。
 
 #### POST /capsules/{id}/open — エモ認証で開封（F-4）
 
@@ -186,11 +210,22 @@ await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
   },
   "attempts_left": 4,
   "locked_until": null,
-  "opened": null
+  "opened": null,
+  "unlock": null
 }
 ```
 
-一致したとき（`ok: true`）は `opened` に中身が入る。**中身の URL は60秒で失効する**ので、受け取ったらすぐ表示する。
+一致したとき（`ok: true`）は `opened` に中身が、`unlock` に解除セッションが入る。
+
+```json
+"unlock": { "token": "kZ3...（32文字くらい）", "expires_at": "2026-10-24T05:17:24Z" }
+```
+
+- `unlock.token` を保存し、ライブラリの API（🔓）に `X-Unlock-Token` ヘッダーで付ける
+- 有効なのは**解除した本人・そのフォルダだけ**、30分間。期限が切れると 401 `unlock_expired` になるので、写真認証画面に戻す
+- 「戻る」でフォルダー一覧に戻ったらトークンは捨てる（次に入るときはまたポーズで解除する）
+
+`opened` の中身の URL は60秒で失効する。成功画面（当時と今を並べる）ですぐ使う。
 
 ```json
 "opened": {
@@ -207,18 +242,42 @@ await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
 - 当時の写真で写っていた関節だけを比べる。上半身だけの写真が鍵なら上半身だけで開けられ、全身の写真が鍵なら今も全身（ひざまで）写っている必要がある。足りないときは `reason: "body_not_visible"` と、各人の `missing_joints`（写っていない関節）を返す
 - 肩の角度は「肩のラインに垂直な下向き」と上腕のなす角（腕を下ろして0度、水平で90度、真上で180度）。腰が写っていなくても測れる
 - 5回失敗すると10分ロック。失敗に数えるのは `count_mismatch` と `pose_mismatch` だけ（誰も写っていない・体が切れているのは数えない）
-- 開封済みのカプセルも再び開けられる。開けるたびに認証アルバムに写真が増える（F-7）
+- 何度でも開けられる。開けるたびに認証アルバムに写真が増える（F-7）
 
 | エラー | code | 意味 |
 | --- | --- | --- |
-| 409 | `not_open_yet` | 開封日前（`open_date` 付き） |
+| 409 | `not_open_yet` | 開封日前（開封日を設定したときだけ。`open_date` 付き） |
 | 423 | `locked` | 失敗が続いてロック中（`locked_until` 付き） |
 | 400 | `invalid_s3_key` | purpose=attempt 以外、または他人のアップロード |
 | 404 | `upload_not_found` | PUT が終わる前に呼んだ |
 
-#### GET /capsules/{id}/contents ／ GET /capsules/{id}/album
+#### GET /capsules/{id}/contents — ライブラリ 🔓
 
-開封済みのときだけ使える（未開封なら 409 `not_opened`）。中身の見直しと、開封に成功したときの写真の一覧。
+形は `opened` と同じ（`key_photo_url`・`attempt_photo_url`（直近の解除写真）・`contents`・`url_expires_in`）。
+
+- **写真の URL は60秒で失効する。** 1枚表示で左右にスライドするときなど、表示できなくなったら（`<img>` の `onerror`）このAPIを呼び直して URL を取り直す。解除中なら何度呼んでもよい
+- `contents` は追加した順。`author_id` が自分か、自分が作成者（`role: "owner"`）なら削除ボタンを出す
+
+| エラー | code | 意味 |
+| --- | --- | --- |
+| 401 | `unlock_required` | トークンがない・違う → 写真認証画面へ |
+| 401 | `unlock_expired` | 解除から30分たった → 写真認証画面へ |
+
+#### DELETE /capsules/{id}/contents/{content_id} — 写真を削除 🔓
+
+204（本文なし）。画像ファイルも消える。複数選んで消すときは1枚ずつ呼ぶ。
+
+- 消せるのは**追加した本人か、フォルダの作成者**
+
+| エラー | code | 意味 |
+| --- | --- | --- |
+| 403 | `not_author` | 他の人が追加した写真 |
+| 404 | `content_not_found` | もう消えている |
+| 401 | `unlock_required` / `unlock_expired` | 解除していない・期限切れ |
+
+#### GET /capsules/{id}/album — 認証アルバム 🔓
+
+ロックを解除した瞬間の写真の一覧（解除するたびに増える）。
 
 ```json
 // album
@@ -234,7 +293,7 @@ await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
 
 - リンクは期限（14日）まで何人でも使える（結婚式のゲスト全員に同じリンクを配る想定）
 - メンバーの人数に上限はない。開けるときに揃う必要があるのは、鍵の写真に写っている人数（`people_count`）
-- 開封後のカプセルには参加できない（リンクを知っているだけで中身が見られないように）
+- 開封済みのフォルダにも参加できる。ただし中身を見るには自分たちでポーズを揃えて解除する必要があるので、リンクを知っているだけでは見られない
 
 #### POST /capsules/{id}/invites — 招待リンクを発行（作成者のみ）
 
@@ -246,7 +305,6 @@ await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
 | エラー | code | 意味 |
 | --- | --- | --- |
 | 403 | `not_owner` | 作成者以外が発行しようとした |
-| 409 | `already_opened` | 開封済み |
 
 #### GET /invites/{token} — 招待の中身を確認（参加前でも見られる）
 
@@ -256,8 +314,8 @@ await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
 {
   "capsule_id": "a1b2c3d4e5f6",
   "capsule_name": "成人式",
-  "open_date": "2036-01-12",
-  "days_until_open": 3367,
+  "open_date": "2036-01-12",  // 開封日なしなら null
+  "days_until_open": 3367,    // 開封日なしなら null
   "people_count": 4,          // 開けるときに揃う人数
   "members_count": 3,
   "invited_by": "user-123",
@@ -274,7 +332,6 @@ await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
 | --- | --- | --- |
 | 404 | `invite_not_found` | リンクが間違っている |
 | 410 | `invite_expired` | 期限切れ → 作成者に新しいリンクをもらう |
-| 409 | `already_opened` | もう開封されたカプセル |
 
 #### GET /capsules/{id}/members — メンバー一覧
 
@@ -295,9 +352,10 @@ await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
 | status | code |
 | --- | --- |
 | 400 | `invalid_s3_key` `invalid_image` `text_required` `s3_key_required` |
-| 403 | `not_member` `not_owner` |
-| 404 | `capsule_not_found` `upload_not_found` `invite_not_found` |
-| 409 | `not_open_yet` `already_opened` `not_opened` |
+| 401 | `unlock_required` `unlock_expired` |
+| 403 | `not_member` `not_owner` `not_author` |
+| 404 | `capsule_not_found` `upload_not_found` `invite_not_found` `content_not_found` |
+| 409 | `not_open_yet` |
 | 410 | `invite_expired` |
 | 413 | `image_too_large` |
 | 422 | `no_person` `too_many_people` `pose_not_visible` `validation_error`（`details` 付き） |
@@ -351,6 +409,7 @@ docker run --rm -p 9000:8080 -e EMO_BUCKET=... -e EMO_TABLE=... -e AWS_REGION=ap
 | `EMO_CORS_ORIGINS` | ✓ | `https://main.xxxx.amplifyapp.com,http://localhost:5173` | API の CORS 許可オリジン（カンマ区切り） |
 | `EMO_IGNORE_OPEN_DATE` | | `false` | デモ時は `true` で開封日前でも開けられる |
 | `EMO_INVITE_DAYS` | | `14` | 招待リンクの有効期限（日） |
+| `EMO_UNLOCK_MINUTES` | | `30` | ポーズで解除してからライブラリを使える時間（分） |
 | `EMO_TOLERANCE_DEG` | | `20` | 判定の許容値（度） |
 | `EMO_MAX_FAILURES` / `EMO_LOCK_MINUTES` | | `5` / `10` | 失敗回数とロック時間 |
 | `EMO_DETECTION_CONFIDENCE` | | `0.2` | 人物検出のしきい値 |
@@ -380,6 +439,9 @@ docker run --rm -p 9000:8080 -e EMO_BUCKET=... -e EMO_TABLE=... -e AWS_REGION=ap
 | Content | `CAPSULE#{id}` | `CONTENT#{createdAt}#{cid}` | | |
 | OpenRecord | `CAPSULE#{id}` | `OPEN#{openedAt}` | | |
 | Invite | `INVITE#{token}` | `META` | | |
+| UnlockSession | `SESSION#{token}` | `META` | | |
+
+任意：テーブルの TTL を属性 `ttl` で有効にすると、期限切れの UnlockSession が自動で消える（有効にしなくても動く）。
 
 ```bash
 aws dynamodb create-table --table-name emo-timecapsule \
@@ -417,12 +479,12 @@ aws dynamodb create-table --table-name emo-timecapsule \
   "Statement": [
     {
       "Effect": "Allow",
-      "Action": ["s3:GetObject", "s3:PutObject"],
+      "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
       "Resource": "arn:aws:s3:::BUCKET_NAME/*"
     },
     {
       "Effect": "Allow",
-      "Action": ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:Query"],
+      "Action": ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:DeleteItem", "dynamodb:Query"],
       "Resource": [
         "arn:aws:dynamodb:ap-northeast-1:ACCOUNT_ID:table/TABLE_NAME",
         "arn:aws:dynamodb:ap-northeast-1:ACCOUNT_ID:table/TABLE_NAME/index/GSI1"

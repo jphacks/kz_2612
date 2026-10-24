@@ -69,6 +69,14 @@ def test_repository_on_dynamodb(aws):
     # 招待はカプセルとは別のパーティションなので、カプセル配下の検索には出てこない
     assert repo.list_contents("c1")[0]["text"] == "おめでとう"
 
+    repo.create_unlock_session({"token": "s3ss", "capsule_id": "c1", "user_id": "alice",
+                                "expires_at": "2026-10-24T01:00:00+00:00", "ttl": 1792803600})
+    assert repo.get_unlock_session("s3ss")["ttl"] == 1792803600
+    content = repo.get_content("c1", "x")
+    repo.delete_content(content)
+    assert repo.list_contents("c1") == []
+    assert repo.get_content("c1", "x") is None
+
 
 def test_s3_storage(aws):
     storage = S3Storage("emo-bucket", REGION)
@@ -76,5 +84,7 @@ def test_s3_storage(aws):
     storage.put_bytes("previews/a.jpg", b"abc", "image/jpeg")
     assert storage.size("previews/a.jpg") == 3
     assert storage.get_bytes("previews/a.jpg") == b"abc"
+    storage.delete("previews/a.jpg")
+    assert storage.size("previews/a.jpg") is None
     url = storage.presign_put("uploads/alice/key/a.jpg", "image/jpeg", 300)
     assert "X-Amz-Signature" in url and "emo-bucket" in url

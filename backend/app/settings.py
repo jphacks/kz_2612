@@ -38,6 +38,8 @@ class Settings:
     ignore_open_date: bool = False
     # 招待リンクの有効期限（日）
     invite_days: int = 14
+    # ポーズで解除してからライブラリを使える時間（分）
+    unlock_minutes: int = 30
 
     cors_origins: tuple[str, ...] = field(default_factory=lambda: ("*",))
 
@@ -60,6 +62,7 @@ class Settings:
             lock_minutes=int(_env("EMO_LOCK_MINUTES", str(d.lock_minutes))),
             ignore_open_date=_env_bool("EMO_IGNORE_OPEN_DATE", d.ignore_open_date),
             invite_days=int(_env("EMO_INVITE_DAYS", str(d.invite_days))),
+            unlock_minutes=int(_env("EMO_UNLOCK_MINUTES", str(d.unlock_minutes))),
             cors_origins=tuple(o.strip() for o in _env("EMO_CORS_ORIGINS", "*").split(",") if o.strip()),
             local_data_dir=_env("EMO_LOCAL_DATA_DIR", d.local_data_dir),
             public_base_url=_env("EMO_PUBLIC_BASE_URL", d.public_base_url).rstrip("/"),
