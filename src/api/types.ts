@@ -39,16 +39,14 @@ export interface UploadTicket {
 
 export interface ContentView {
   content_id: string
-  type: 'message' | 'photo'
+  type: 'photo'
   author_id: string
   created_at: string
-  text: string | null
-  url: string | null
+  url: string
 }
 
 export interface OpenedContents {
   key_photo_url: string
-  attempt_photo_url: string
   contents: ContentView[]
   url_expires_in: number
 }

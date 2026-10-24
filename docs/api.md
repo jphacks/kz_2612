@@ -21,7 +21,7 @@
 | 形式 | JSON（`Content-Type: application/json`） |
 | 日付 | 開封日は `YYYY-MM-DD`（日本時間、**任意**）。日時は ISO 8601（UTC） |
 | 認証 | Cognito 導入までは `X-User-Id` ヘッダーでユーザーを指定（無ければ `demo-user`）。メールアドレスは `X-User-Email`（任意） |
-| ロック解除 | ポーズが一致すると `unlock.token` が返る。ライブラリの API には `X-Unlock-Token` ヘッダーで付ける（既定は期限なし） |
+| ロック解除 | ポーズが一致すると `unlock.token` が返る。ライブラリの API には `X-Unlock-Token` ヘッダーで付ける（最大12時間） |
 
 ### 画像のアップロード（全画像共通の2ステップ）
 
@@ -55,10 +55,9 @@ await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
 | GET | `/capsules/{id}` | 詳細・写真認証カメラのガイド | 写真認証画面 |
 | POST | `/capsules/{id}/open` | ポーズでロック解除 | 写真を撮る → 認証中/成功/失敗 |
 | GET | `/capsules/{id}/contents` | ライブラリ（写真一覧）🔓 | 写真ライブラリ画面・1枚写真画面 |
-| POST | `/capsules/{id}/contents` | 写真（メッセージ）を追加 | 追加 → アップロード |
+| POST | `/capsules/{id}/contents` | 写真を追加（最大20枚） | 追加 → アップロード |
 | DELETE | `/capsules/{id}/contents/{content_id}` | 写真を削除 🔓 | 選択 → 削除 |
 | DELETE | `/capsules/{id}` | フォルダを削除（参加者なら誰でも） | （フローには未記載） |
-| GET | `/capsules/{id}/album` | 認証アルバム（解除した瞬間の写真）🔓 | （フローには未記載） |
 | POST | `/capsules/{id}/invites` | 招待リンクを発行（作成者のみ） | 作成登録画面（参加アカウント） |
 | GET | `/invites/{token}` | 招待の中身を確認（参加前） | 招待ページ |
 | POST | `/invites/{token}/accept` | 招待から参加 | 招待ページ |
@@ -170,10 +169,9 @@ await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
 - 左右は「写っている本人から見た左右」（MediaPipe と同じ）
 - 署名付きURLは60秒で切れるので、表示し直すときは詳細を取り直す
 
-#### POST /capsules/{id}/contents — 写真・メッセージの追加
+#### POST /capsules/{id}/contents — 写真の追加
 
 ```json
-{ "type": "message", "text": "10年後のみんなへ" }
 { "type": "photo", "s3_key": "uploads/demo-user/content/....jpg" }
 ```
 
@@ -231,18 +229,16 @@ await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
 ```
 
 - `unlock.token` を保存し、ライブラリの API（🔓）に `X-Unlock-Token` ヘッダーで付ける
-- 有効なのは**解除した本人・そのフォルダだけ**。既定は期限なし（`expires_at: null`）。`EMO_UNLOCK_MINUTES` で期限を付けた場合、切れると 401 `unlock_expired` になるので、写真認証画面に戻す
-- 「戻る」でフォルダー一覧に戻ったらトークンは捨てる（次に入るときはまたポーズで解除する）
+- 有効なのは**解除した本人・そのフォルダだけ**で、既定は最大12時間。期限が切れると 401 `unlock_expired` になるので、写真認証画面に戻す
+- 画面更新やフォルダー一覧へ戻る操作ではトークンを保持する。期限切れ・ログアウト・アカウント切替時に破棄する
 
-`opened` の中身の URL は60秒で失効する。成功画面（当時と今を並べる）ですぐ使う。
+`opened` の写真 URL は60秒で失効する。認証に使った撮影画像は判定用に読み込んだ直後に削除し、レスポンスにも含めない。
 
 ```json
 "opened": {
   "key_photo_url": "https://...",       // 当時
-  "attempt_photo_url": "https://...",   // 今（並べて表示する）
   "contents": [
-    { "content_id": "...", "type": "message", "text": "10年後のみんなへ", "url": null, "author_id": "...", "created_at": "..." },
-    { "content_id": "...", "type": "photo", "text": null, "url": "https://...", "author_id": "...", "created_at": "..." }
+    { "content_id": "...", "type": "photo", "url": "https://...", "author_id": "...", "created_at": "..." }
   ],
   "url_expires_in": 60
 }
@@ -270,7 +266,7 @@ await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
 - 開けるのに成功すると、そのときの顔が記憶に加わる（年月で顔が変わってもついていける）
 - 詳細（`GET /capsules/{id}`）の `guide[].face_registered` で、顔の記憶があるかわかる
 - 失敗によるロックは既定で無し（何回でも撮り直せる。`attempts_left` は `null`）。`EMO_MAX_FAILURES` を設定すると、その回数の失敗でロックされ 423 `locked` になる。失敗に数えるのは `count_mismatch` と `pose_mismatch` だけ
-- 何度でも開けられる。開けるたびに認証アルバムに写真が増える（F-7）
+- 何度でも開けられる。認証写真は成功・失敗にかかわらず保存しない
 
 | エラー | code | 意味 |
 | --- | --- | --- |
@@ -281,7 +277,7 @@ await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
 
 #### GET /capsules/{id}/contents — ライブラリ 🔓
 
-形は `opened` と同じ（`key_photo_url`・`attempt_photo_url`（直近の解除写真）・`contents`・`url_expires_in`）。
+形は `opened` と同じ（`key_photo_url`・`contents`・`url_expires_in`）。
 
 - **写真の URL は60秒で失効する。** 1枚表示で左右にスライドするときなど、表示できなくなったら（`<img>` の `onerror`）このAPIを呼び直して URL を取り直す。解除中なら何度呼んでもよい
 - `contents` は追加した順。削除ボタンは全員に出してよい（参加者なら誰の写真でも消せる）
@@ -312,8 +308,8 @@ await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
 | 種類 | 中身 |
 | --- | --- |
 | 鍵 | 鍵の写真、骨格プレビュー、鍵のポーズ、顔の記憶 |
-| 中身 | 入れた写真・メッセージ |
-| 認証まわり | 開封記録（認証アルバム）、開けたとき・開けられなかったときの撮影画像、解除セッション |
+| 中身 | 入れた写真 |
+| 認証まわり | 解除セッション（認証写真と認証アルバムは保存しない） |
 | 参加 | メンバー、招待リンク |
 
 - 消したあとは、そのフォルダの API はすべて 404 `capsule_not_found`、招待リンクも 404 になる
@@ -324,24 +320,15 @@ await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
 | 403 | `not_member` | フォルダの参加者ではない |
 | 404 | `capsule_not_found` | もう消えている |
 
-#### GET /capsules/{id}/album — 認証アルバム 🔓
-
-ロックを解除した瞬間の写真の一覧（解除するたびに増える）。
-
-```json
-// album
-{ "key_photo_url": "https://...", "entries": [ { "opened_at": "...", "photo_url": "https://...", "score": 91 } ], "url_expires_in": 60 }
-```
-
 ### メンバー招待（F-3）
 
 作成者が招待リンクを発行 → 受け取った人がリンクを開いてログイン → 「参加する」でメンバーになる。
-メンバーは中身の追加・開封・アルバムの閲覧ができる（招待リンクの発行は作成者だけ）。
+参加後は全員が写真の追加・削除・フォルダ削除・開封を同じ権限で行える（招待リンクの発行だけは作成者のみ）。
 
 **招待リンクの URL はフロントで組み立てる**：`https://<フロントのURL>/invite/{token}` のようなページを作り、そのページで下の GET → POST を呼ぶ。
 
-- リンクは期限（14日）まで何人でも使える（結婚式のゲスト全員に同じリンクを配る想定）
-- メンバーの人数に上限はない。開けるときに揃う必要があるのは、鍵の写真に写っている人数（`people_count`）
+- リンクは期限（14日）まで使えるが、作成者を含めて4人に達すると新しく参加できない
+- 参加アカウントと鍵写真の人物・人数は照合しない。参加登録はフォルダを自分の一覧に表示するために行う
 - 開封済みのフォルダにも参加できる。ただし中身を見るには自分たちでポーズを揃えて解除する必要があるので、リンクを知っているだけでは見られない
 
 #### POST /capsules/{id}/invites — 招待リンクを発行（作成者のみ）
@@ -458,7 +445,7 @@ docker run --rm -p 9000:8080 -e EMO_BUCKET=... -e EMO_TABLE=... -e AWS_REGION=ap
 | `EMO_CORS_ORIGINS` | ✓ | `https://main.xxxx.amplifyapp.com,http://localhost:5173` | API の CORS 許可オリジン（カンマ区切り） |
 | `EMO_IGNORE_OPEN_DATE` | | `false` | デモ時は `true` で開封日前でも開けられる |
 | `EMO_INVITE_DAYS` | | `14` | 招待リンクの有効期限（日） |
-| `EMO_UNLOCK_MINUTES` | | `0` | ポーズで解除してからライブラリを使える時間（分）。0 は期限なし |
+| `EMO_UNLOCK_MINUTES` | | `720` | ポーズで解除してからライブラリを使える時間（分）。既定は最大12時間 |
 | `EMO_POINT_TOLERANCE` | | `0.35` | 点の位置のずれの許容値（肩幅を1） |
 | `EMO_MAX_MISSING_POINTS` | | `2` | 開けるとき、当時写っていた点が何点まで隠れてよいか |
 | `EMO_FACE_CHECK` | | `true` | 顔の判定をするか |
@@ -491,14 +478,12 @@ docker run --rm -p 9000:8080 -e EMO_BUCKET=... -e EMO_TABLE=... -e AWS_REGION=ap
 | Capsule | `CAPSULE#{id}` | `META` | | |
 | Member | `CAPSULE#{id}` | `MEMBER#{userId}` | `USER#{userId}` | `CAPSULE#{id}` |
 | Content | `CAPSULE#{id}` | `CONTENT#{createdAt}#{cid}` | | |
-| OpenRecord | `CAPSULE#{id}` | `OPEN#{openedAt}` | | |
 | Invite | `INVITE#{token}` | `META` | | |
 | UnlockSession | `SESSION#{token}` | `META` | | |
 | InviteRef | `CAPSULE#{id}` | `INVITE#{token}` | | |
 | SessionRef | `CAPSULE#{id}` | `SESSION#{token}` | | |
-| AttemptRef | `CAPSULE#{id}` | `ATTEMPT#{at}#{file}` | | |
 
-`*Ref` はフォルダを削除するときの目印（別のパーティションにある招待・解除セッションと、開けられなかったときの撮影画像を漏れなく消すため）。
+`*Ref` はフォルダを削除するときの目印（別のパーティションにある招待・解除セッションを漏れなく消すため）。
 
 任意：テーブルの TTL を属性 `ttl` で有効にすると、期限切れの UnlockSession が自動で消える（有効にしなくても動く）。
 

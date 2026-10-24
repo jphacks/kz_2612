@@ -442,15 +442,10 @@ export function ResultPage() {
         </div>
 
         {result.opened && (
-          <div className="comparison">
+          <div className="comparison comparison--key-only">
             <div>
               <span>鍵写真</span>
               <img className="comparison__photo" src={result.opened.key_photo_url} alt="鍵写真" />
-            </div>
-            <div className="comparison__equal">＝</div>
-            <div>
-              <span>いまの写真</span>
-              <img className="comparison__photo" src={result.opened.attempt_photo_url} alt="認証時の写真" />
             </div>
           </div>
         )}

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { App } from './App'
@@ -37,6 +37,7 @@ describe('App routes', () => {
   })
 
   afterEach(() => {
+    cleanup()
     vi.unstubAllGlobals()
     sessionStorage.clear()
     localStorage.clear()
@@ -201,4 +202,102 @@ describe('App routes', () => {
       expect(acceptance).toBeDefined()
     })
   })
+  it('shows the current account and clears unlock sessions on logout', () => {
+    sessionStorage.setItem(
+      'web-time-capsule:unlock:capsule-1',
+      JSON.stringify({ token: 'unlock-token', expiresAt: Date.now() + 60_000 }),
+    )
+
+    render(
+      <MemoryRouter initialEntries={['/account']}>
+        <App />
+      </MemoryRouter>,
+    )
+
+    expect(screen.getByText('demo@example.com')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'ログアウト' }))
+
+    expect(
+      screen.getByRole('button', { name: '開発用アカウントで進む' }),
+    ).toBeInTheDocument()
+    expect(
+      sessionStorage.getItem('web-time-capsule:unlock:capsule-1'),
+    ).toBeNull()
+  })
+
+  it('lets a participant permanently delete a folder after confirmation', async () => {
+    const fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      if (url.endsWith('/capsules/capsule-1') && init?.method === 'DELETE') {
+        return Promise.resolve({
+          ok: true,
+          status: 204,
+          json: async () => undefined,
+        })
+      }
+      if (url.endsWith('/capsules/capsule-1/members')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => [
+            {
+              user_id: 'demo-user',
+              email: 'demo@example.com',
+              role: 'member',
+            },
+          ],
+        })
+      }
+      if (url.endsWith('/capsules/capsule-1')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            capsule_id: 'capsule-1',
+            name: '夏合宿',
+            open_date: null,
+            days_until_open: null,
+            status: 'locked',
+            people_count: 3,
+            role: 'member',
+            key_photo_url: 'key.jpg',
+            preview_url: null,
+            url_expires_in: 60,
+            guide: [],
+            can_open_now: true,
+            locked_until: null,
+            attempts_left: null,
+            contents_count: 2,
+            opened_at: null,
+          }),
+        })
+      }
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => [],
+      })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(
+      <MemoryRouter initialEntries={['/folders/capsule-1/settings']}>
+        <App />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByRole('heading', { name: '夏合宿' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'フォルダを削除' }))
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '完全に削除' }))
+
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.some(
+        ([url, init]) =>
+          String(url).endsWith('/capsules/capsule-1') &&
+          (init as RequestInit | undefined)?.method === 'DELETE',
+      )).toBe(true)
+    })
+    expect(await screen.findByRole('heading', { name: '思い出フォルダ' })).toBeInTheDocument()
+  })
+
 })

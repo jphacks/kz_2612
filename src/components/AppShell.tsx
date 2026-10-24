@@ -76,10 +76,13 @@ function BottomNavigation() {
         <span className="bottom-nav__plus"><Plus size={22} /></span>
         <span>つくる</span>
       </NavLink>
-      <button className="bottom-nav__item" type="button">
+      <NavLink
+        to="/account"
+        className={({ isActive }) => classNames('bottom-nav__item', isActive && 'is-active')}
+      >
         <UserRound size={21} />
         <span>アカウント</span>
-      </button>
+      </NavLink>
     </nav>
   )
 }

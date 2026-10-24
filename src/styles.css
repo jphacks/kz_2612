@@ -1923,6 +1923,12 @@ p {
   margin: 28px 0 18px;
 }
 
+.comparison--key-only {
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 22rem;
+  margin-inline: auto;
+}
+
 .comparison > div:not(.comparison__equal) > span {
   display: block;
   margin-bottom: 7px;
@@ -3160,18 +3166,6 @@ p {
   object-fit: cover;
 }
 
-.message-card {
-  margin-bottom: 14px;
-}
-
-.message-card small {
-  color: var(--muted);
-}
-
-.message-card p {
-  margin: 7px 0 0;
-}
-
 .upload-file-list {
   display: grid;
   gap: 7px;
@@ -3199,4 +3193,135 @@ p {
   color: var(--muted);
   font-size: 0.72rem;
   text-align: center;
+}
+.avatar-button {
+  text-decoration: none;
+}
+
+.delete-confirmation {
+  padding: 16px;
+  border: 1px solid #f0b7ae;
+  border-radius: 18px;
+  background: #fff4f1;
+}
+
+.delete-confirmation > strong {
+  display: block;
+  color: #7d2d2b;
+  font-size: 0.9rem;
+}
+
+.delete-confirmation > p {
+  margin: 6px 0 14px;
+  color: #8e5954;
+  font-size: 0.75rem;
+}
+
+.delete-confirmation > div {
+  display: grid;
+  grid-template-columns: 1fr 1.35fr;
+  gap: 9px;
+}
+
+.screen--account {
+  min-height: 100%;
+  padding-bottom: calc(110px + env(safe-area-inset-bottom));
+}
+
+.account-heading {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  margin: 12px 0 25px;
+}
+
+.account-heading > span,
+.account-card__avatar {
+  display: grid;
+  flex: 0 0 auto;
+  width: 54px;
+  height: 54px;
+  place-items: center;
+  border-radius: 18px;
+  color: var(--primary);
+  background: var(--primary-soft);
+}
+
+.account-heading p {
+  margin: 0 0 2px;
+  color: var(--primary);
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.account-heading h1 {
+  margin: 0;
+  font-size: 1.55rem;
+}
+
+.account-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px;
+}
+
+.account-card > div {
+  min-width: 0;
+}
+
+.account-card small,
+.account-detail-list small {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+
+.account-card strong {
+  display: block;
+  overflow: hidden;
+  font-size: 0.92rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-detail-list {
+  overflow: hidden;
+  margin-top: 18px;
+  border: 1px solid var(--line);
+  border-radius: 19px;
+  background: var(--surface);
+}
+
+.account-detail-list > div {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 16px;
+}
+
+.account-detail-list > div + div {
+  border-top: 1px solid var(--line);
+}
+
+.account-detail-list > div > svg {
+  flex: 0 0 auto;
+  color: var(--primary);
+}
+
+.account-detail-list strong {
+  font-size: 0.82rem;
+}
+
+.account-signout {
+  margin-top: 28px;
+}
+
+.account-signout p {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.7;
 }

@@ -177,7 +177,7 @@ export function InviteMembersPage() {
             <section className="settings-section">
               <div className="settings-section__heading">
                 <h2>現在の参加者</h2>
-                <span>{members.length}人</span>
+                <span>{members.length} / 4人</span>
               </div>
               <div className="member-list">
                 {members.map((member) => (
@@ -193,8 +193,8 @@ export function InviteMembersPage() {
             </section>
 
             <div className="notice-box">
-              招待を承認したアカウントには、このフォルダが「参加中」として表示されます。
-              作成後の参加者追加・削除はMVPでは行いません。
+              作成者を含めて最大4人です。参加後は全員が写真の追加・削除と
+              フォルダ削除を同じ権限で行えます。
             </div>
           </>
         )}
@@ -280,6 +280,7 @@ export function InviteAcceptPage() {
       signedInUser &&
       preview &&
       !preview.already_member &&
+      preview.members_count < 4 &&
       !autoJoinStarted.current
     ) {
       autoJoinStarted.current = true
@@ -355,19 +356,28 @@ export function InviteAcceptPage() {
               鍵写真の人物と参加アカウントを照合することはありません。
             </div>
 
+            {!preview.already_member && preview.members_count >= 4 && (
+              <div className="api-error" role="alert">
+                このフォルダは参加上限の4人に達しています。
+              </div>
+            )}
+
             {error && <div className="api-error" role="alert">{error}</div>}
 
             <div className="invite-accept-actions">
               <Button
                 fullWidth
                 loading={joining}
+                disabled={!preview.already_member && preview.members_count >= 4}
                 onClick={preview.already_member
                   ? () => navigate('/folders/' + preview.capsule_id + '/unlock')
                   : joinOrSignIn}
               >
                 {preview.already_member
                   ? 'フォルダを開く'
-                  : isCognitoConfigured && !signedInUser
+                  : preview.members_count >= 4
+                    ? '参加人数が上限です'
+                    : isCognitoConfigured && !signedInUser
                     ? 'Googleで参加する'
                     : '招待を承認して参加'}
               </Button>

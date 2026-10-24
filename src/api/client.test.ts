@@ -3,6 +3,7 @@ import {
   acceptInvite,
   API_BASE_URL,
   createInvite,
+  deleteCapsule,
   getContents,
   getInvite,
   listCapsules,
@@ -52,7 +53,6 @@ describe('API client', () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({
         key_photo_url: 'key.jpg',
-        attempt_photo_url: 'attempt.jpg',
         contents: [],
         url_expires_in: 60,
       }),
@@ -84,4 +84,20 @@ describe('API client', () => {
     expect((fetchMock.mock.calls[0][1] as RequestInit).method).toBe('POST')
     expect((fetchMock.mock.calls[2][1] as RequestInit).method).toBe('POST')
   })
+  it('deletes a folder through the capsule endpoint', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 204,
+      json: async () => undefined,
+    } as Response)
+    vi.stubGlobal('fetch', fetchMock)
+
+    await deleteCapsule('capsule-1')
+
+    expect(fetchMock).toHaveBeenCalledOnce()
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe(API_BASE_URL + '/capsules/capsule-1')
+    expect(init.method).toBe('DELETE')
+  })
+
 })

@@ -58,9 +58,9 @@ export function FolderListPage() {
             <span className="home-header__greeting">おかえりなさい</span>
             <h1>思い出フォルダ</h1>
           </div>
-          <button className="avatar-button" type="button" aria-label="アカウント">
+          <Link className="avatar-button" to="/account" aria-label="アカウント">
             YO
-          </button>
+          </Link>
         </header>
 
         <Link className="create-banner" to="/folders/new">

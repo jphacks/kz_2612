@@ -69,21 +69,19 @@ class CapsuleDetail(CapsuleSummary):
 
 
 class AddContentRequest(BaseModel):
-    type: Literal["message", "photo"]
-    text: str | None = Field(default=None, max_length=2000, description="type=message のとき必須")
-    s3_key: str | None = Field(default=None, description="type=photo のとき必須（purpose=content でアップロードしたもの）")
+    type: Literal["photo"]
+    s3_key: str = Field(description="purpose=content でアップロードした写真")
 
 
 class ContentMeta(BaseModel):
     content_id: str
-    type: Literal["message", "photo"]
+    type: Literal["photo"]
     author_id: str
     created_at: dt.datetime
 
 
 class ContentView(ContentMeta):
-    text: str | None = None
-    url: str | None = None
+    url: str
 
 
 class OpenRequest(BaseModel):
@@ -139,7 +137,6 @@ class MatchResultOut(BaseModel):
 
 class OpenedContents(BaseModel):
     key_photo_url: str
-    attempt_photo_url: str
     contents: list[ContentView]
     url_expires_in: int
 
@@ -180,15 +177,3 @@ class InvitePreview(BaseModel):
     invited_by: str
     expires_at: dt.datetime
     already_member: bool
-
-
-class AlbumEntry(BaseModel):
-    opened_at: dt.datetime
-    photo_url: str
-    score: int
-
-
-class AlbumResponse(BaseModel):
-    key_photo_url: str
-    entries: list[AlbumEntry]
-    url_expires_in: int

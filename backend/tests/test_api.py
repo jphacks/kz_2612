@@ -1,4 +1,4 @@
-"""API の一連の流れ（作成 → 中身追加 → 開封 → アルバム）。姿勢推定は偽物に差し替える。"""
+"""API の一連の流れ（作成 → 写真追加 → 認証 → 閲覧）。姿勢推定は偽物に差し替える。"""
 
 import datetime as dt
 import io
@@ -105,14 +105,16 @@ def test_full_flow(env):
     assert client.get(capsule["preview_url"]).status_code == 200
 
     h = {"X-User-Id": "alice"}
-    assert client.post(f"/capsules/{cid}/contents", json={"type": "message", "text": "10年後のみんなへ"}, headers=h).status_code == 201
+    message = client.post(f"/capsules/{cid}/contents", json={"type": "message", "text": "10年後のみんなへ"}, headers=h)
+    assert message.status_code == 422
+    assert message.json()["error"]["code"] == "validation_error"
     photo = upload(client, "content")
     assert client.post(f"/capsules/{cid}/contents", json={"type": "photo", "s3_key": photo}, headers=h).status_code == 201
 
     listed = client.get("/capsules", headers=h).json()
     assert [c["capsule_id"] for c in listed] == [cid]
     detail = client.get(f"/capsules/{cid}", headers=h).json()
-    assert detail["contents_count"] == 2
+    assert detail["contents_count"] == 1
     assert "contents" not in detail  # 開封前に中身は返さない
     res = client.get(f"/capsules/{cid}/contents", headers=h)
     assert res.status_code == 401
@@ -135,8 +137,6 @@ def test_full_flow(env):
     assert res["attempts_left"] is None
     opened = res["opened"]
     assert opened["url_expires_in"] == 60
-    texts = [c["text"] for c in opened["contents"] if c["type"] == "message"]
-    assert texts == ["10年後のみんなへ"]
     photo_url = next(c["url"] for c in opened["contents"] if c["type"] == "photo")
     assert client.get(photo_url).content == png()
 
@@ -146,14 +146,13 @@ def test_full_flow(env):
     assert res["unlock"]["token"]
     u = {**h, "X-Unlock-Token": res["unlock"]["token"]}
     assert client.get(f"/capsules/{cid}/contents", headers=h).status_code == 401  # トークンなし
-    assert len(client.get(f"/capsules/{cid}/contents", headers=u).json()["contents"]) == 2
-    album = client.get(f"/capsules/{cid}/album", headers=u).json()
-    assert len(album["entries"]) == 1
+    assert len(client.get(f"/capsules/{cid}/contents", headers=u).json()["contents"]) == 1
+    assert client.get(f"/capsules/{cid}/album", headers=u).status_code == 404
 
     # 解除後も写真を追加できる
     more = upload(client, "content")
     assert client.post(f"/capsules/{cid}/contents", json={"type": "photo", "s3_key": more}, headers=h).status_code == 201
-    assert len(client.get(f"/capsules/{cid}/contents", headers=u).json()["contents"]) == 3
+    assert len(client.get(f"/capsules/{cid}/contents", headers=u).json()["contents"]) == 2
 
 
 def unlock(client, cid, user="alice") -> dict:
@@ -167,6 +166,33 @@ def add_photo(client, cid, user="alice") -> str:
     res = client.post(f"/capsules/{cid}/contents", json={"type": "photo", "s3_key": key}, headers={"X-User-Id": user})
     assert res.status_code == 201, res.text
     return res.json()["content_id"]
+
+
+def test_authentication_photo_is_deleted_after_loading(env, tmp_path):
+    client, _, _ = env
+    cid = create(client).json()["capsule_id"]
+    key = upload(client, "attempt")
+    uploaded = tmp_path / "objects" / key
+    assert uploaded.exists()
+
+    res = client.post(
+        f"/capsules/{cid}/open",
+        json={"s3_key": key},
+        headers={"X-User-Id": "alice"},
+    )
+    assert res.status_code == 200
+    assert not uploaded.exists()
+
+
+def test_folder_accepts_at_most_twenty_photos(env):
+    client, _, _ = env
+    cid = create(client).json()["capsule_id"]
+    for _ in range(20):
+        add_photo(client, cid)
+    extra = upload(client, "content")
+    res = client.post(f"/capsules/{cid}/contents", json={"type": "photo", "s3_key": extra}, headers={"X-User-Id": "alice"})
+    assert res.status_code == 409
+    assert res.json()["error"]["code"] == "photo_limit_reached"
 
 
 def test_delete_photo(env, tmp_path):
@@ -223,7 +249,6 @@ def test_delete_capsule_removes_everything(env, tmp_path):
     client.post(f"/invites/{token}/accept", headers={"X-User-Id": "bob"})
     add_photo(client, cid, "alice")
     add_photo(client, cid, "bob")
-    client.post(f"/capsules/{cid}/contents", json={"type": "message", "text": "また集まろう"}, headers={"X-User-Id": "bob"})
     detector.people = [pose(0.5)]
     open_with(client, cid)                       # 開けられなかった撮影
     detector.people = [pose(0.3), pose(0.7)]
@@ -249,7 +274,7 @@ def test_delete_capsule_removes_everything(env, tmp_path):
     assert _objects(tmp_path) == sorted([kept["key_photo_key"], kept["preview_key"]])
 
     # 消したあとは、どの API でも見つからない
-    for path in (f"/capsules/{cid}", f"/capsules/{cid}/contents", f"/capsules/{cid}/album"):
+    for path in (f"/capsules/{cid}", f"/capsules/{cid}/contents"):
         assert client.get(path, headers=bob).status_code == 404
     assert client.get(f"/invites/{token}", headers={"X-User-Id": "carol"}).status_code == 404
     assert client.delete(f"/capsules/{cid}", headers={"X-User-Id": "alice"}).status_code == 404
@@ -293,7 +318,7 @@ def test_unlock_expires(env):
     assert res.json()["error"]["code"] == "unlock_expired"
 
 
-def test_no_lock_and_no_unlock_expiry_by_default(env):
+def test_no_lock_and_twelve_hour_unlock_expiry_by_default(env):
     client, detector, _ = env
     cid = create(client).json()["capsule_id"]
     assert client.get(f"/capsules/{cid}", headers={"X-User-Id": "alice"}).json()["attempts_left"] is None
@@ -305,10 +330,11 @@ def test_no_lock_and_no_unlock_expiry_by_default(env):
         assert res.status_code == 200
         assert res.json()["attempts_left"] is None
 
-    # 解除の期限なし
+    # 解除セッションは既定で最大12時間
     detector.people = [pose(0.3), pose(0.7)]
     res = open_with(client, cid).json()
-    assert res["unlock"]["expires_at"] is None
+    expires = dt.datetime.fromisoformat(res["unlock"]["expires_at"])
+    assert dt.timedelta(hours=11, minutes=59) < expires - dt.datetime.now(dt.timezone.utc) <= dt.timedelta(hours=12)
     u = {"X-User-Id": "alice", "X-Unlock-Token": res["unlock"]["token"]}
     assert client.get(f"/capsules/{cid}/contents", headers=u).status_code == 200
 

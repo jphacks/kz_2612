@@ -36,3 +36,7 @@ export function setDevelopmentIdentity(email: string): DevelopmentIdentity {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(identity))
   return identity
 }
+
+export function clearDevelopmentIdentity() {
+  localStorage.removeItem(STORAGE_KEY)
+}

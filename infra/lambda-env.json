@@ -4,6 +4,7 @@
     "EMO_TABLE": "emo-timecapsule",
     "EMO_AUTH_MODE": "development",
     "EMO_CORS_ORIGINS": "http://localhost:5173",
-    "EMO_IGNORE_OPEN_DATE": "true"
+    "EMO_IGNORE_OPEN_DATE": "true",
+    "EMO_UNLOCK_MINUTES": "720"
   }
 }

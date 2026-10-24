@@ -16,6 +16,7 @@ import {
 } from './pages/GalleryPages'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { InviteAcceptPage, InviteMembersPage } from './pages/InvitePages'
+import { AccountPage } from './pages/AccountPage'
 import {
   AuthCallbackPage,
   RequireAccount,
@@ -30,6 +31,7 @@ export function App() {
       <Route path="/invite/:token" element={<InviteAcceptPage />} />
       <Route element={<RequireAccount />}>
         <Route path="/folders" element={<FolderListPage />} />
+        <Route path="/account" element={<AccountPage />} />
         <Route path="/folders/new" element={<CreateFolderPage />} />
         <Route
           path="/folders/:folderId/invite-members"

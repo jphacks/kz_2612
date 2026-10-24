@@ -22,10 +22,12 @@ from app.settings import Settings
 
 router = APIRouter(tags=["invites"])
 log = logging.getLogger("emo")
+MAX_MEMBERS = 4
 
 INVITE_ERRORS = {
     404: {"model": ErrorResponse},
     410: {"model": ErrorResponse},
+    409: {"model": ErrorResponse},
 }
 
 
@@ -119,6 +121,8 @@ def accept_invite(
     if existing:
         # 2回押しても、作成者が自分のリンクを開いてもエラーにしない
         return _summary(capsule, existing["role"])
+    if len(repo.list_members(capsule_id)) >= MAX_MEMBERS:
+        raise ApiError(409, "member_limit_reached", "このフォルダは4人参加しているため、これ以上参加できないよ")
     # 開封済みでも参加できる。中身を見るにはポーズでの解除が要るので、リンクだけでは見られない
 
     repo.add_member(capsule_id, user["user_id"], "member", user.get("email"))

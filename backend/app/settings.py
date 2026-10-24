@@ -41,8 +41,8 @@ class Settings:
     ignore_open_date: bool = False
     # 招待リンクの有効期限（日）
     invite_days: int = 14
-    # ポーズで解除してからライブラリを使える時間（分）。0 なら期限なし（既定）
-    unlock_minutes: int = 0
+    # ポーズで解除してからライブラリを使える時間（分）。既定は最大12時間
+    unlock_minutes: int = 12 * 60
 
     cors_origins: tuple[str, ...] = field(default_factory=lambda: ("*",))
 

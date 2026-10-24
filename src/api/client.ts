@@ -84,6 +84,12 @@ export function getCapsule(capsuleId: string) {
   return request<CapsuleDetail>('/capsules/' + encodeURIComponent(capsuleId))
 }
 
+export function deleteCapsule(capsuleId: string) {
+  return request<void>('/capsules/' + encodeURIComponent(capsuleId), {
+    method: 'DELETE',
+  })
+}
+
 export async function uploadImage(
   file: Blob,
   purpose: 'key' | 'attempt' | 'content',

@@ -208,3 +208,16 @@ export async function completeGoogleSignIn(search: string) {
 export function signOutLocally() {
   localStorage.removeItem(TOKEN_KEY)
 }
+
+export function beginSignOut() {
+  signOutLocally()
+  if (!isCognitoConfigured) return false
+
+  const url = new URL(cognitoDomain + '/logout')
+  url.search = new URLSearchParams({
+    client_id: cognitoClientId,
+    logout_uri: window.location.origin,
+  }).toString()
+  window.location.assign(url)
+  return true
+}

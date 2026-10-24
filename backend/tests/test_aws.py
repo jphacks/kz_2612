@@ -45,7 +45,7 @@ def test_repository_on_dynamodb(aws):
         "key_pose": {"version": 1, "people": [{"angles": {"left_elbow": 90.5, "left_knee": None}, "hip_center_x": 0.42}]},
     })
     repo.add_member("c1", "alice", "owner")
-    repo.add_content({"capsule_id": "c1", "content_id": "x", "type": "message", "text": "おめでとう",
+    repo.add_content({"capsule_id": "c1", "content_id": "x", "type": "photo", "s3_key": "contents/x.jpg",
                       "author_id": "alice", "created_at": "2026-10-24T00:00:00+00:00"})
 
     capsule = repo.get_capsule("c1")
@@ -57,8 +57,7 @@ def test_repository_on_dynamodb(aws):
     assert updated["fail_count"] == 3
     assert [m["capsule_id"] for m in repo.list_memberships("alice")] == ["c1"]
     assert repo.get_member("c1", "bob") is None
-    assert [c["text"] for c in repo.list_contents("c1")] == ["おめでとう"]
-    assert repo.list_open_records("c1") == []
+    assert [c["s3_key"] for c in repo.list_contents("c1")] == ["contents/x.jpg"]
 
     repo.add_member("c1", "bob", "member", "bob@example.com")
     assert [m["user_id"] for m in repo.list_members("c1")] == ["alice", "bob"]
@@ -67,7 +66,7 @@ def test_repository_on_dynamodb(aws):
     assert repo.get_invite("t0k3n")["capsule_id"] == "c1"
     assert repo.get_invite("nope") is None
     # 招待はカプセルとは別のパーティションなので、カプセル配下の検索には出てこない
-    assert repo.list_contents("c1")[0]["text"] == "おめでとう"
+    assert repo.list_contents("c1")[0]["s3_key"] == "contents/x.jpg"
 
     repo.create_unlock_session({"token": "s3ss", "capsule_id": "c1", "user_id": "alice",
                                 "expires_at": "2026-10-24T01:00:00+00:00", "ttl": 1792803600})
@@ -78,9 +77,8 @@ def test_repository_on_dynamodb(aws):
     assert repo.get_content("c1", "x") is None
 
     # フォルダの削除: パーティションの全件と、別パーティションの招待・解除セッションも消える
-    repo.add_attempt_ref("c1", "uploads/alice/attempt/a.jpg", "2026-10-24T00:00:00+00:00")
     items = repo.delete_capsule("c1")
-    assert {i["entity"] for i in items} >= {"Capsule", "Member", "InviteRef", "SessionRef", "AttemptRef"}
+    assert {i["entity"] for i in items} >= {"Capsule", "Member", "InviteRef", "SessionRef"}
     assert repo.get_capsule("c1") is None
     assert repo.get_invite("t0k3n") is None
     assert repo.get_unlock_session("s3ss") is None
