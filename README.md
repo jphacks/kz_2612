@@ -23,7 +23,7 @@
 * 一人では開けられないので、みんなの写真を「みんながそろったときに見る特別なもの」として残せます。
 ### 今後の展望
 * Googleログイン（Amazon Cognito）に対応する
-* カメラ画面で骨格をリアルタイムに重ね、ポーズ合わせを手伝う（MediaPipe）
+* カメラ画面で最大4人の骨格をリアルタイムに重ね、ポーズ合わせを手伝う（MoveNet MultiPose）
 * 開封日が近づいたらメンバーに知らせる（Amazon EventBridge Scheduler・Amazon SES）
 * 離れて暮らすメンバーが、別々の場所で撮った写真を合わせて開けるようにする
 ### 注力したこと（こだわり等）
@@ -108,8 +108,8 @@ pnpm test
 
 - API認証はCognito導入前のため、.env.local の VITE_DEMO_USER_ID を X-User-Id として送ります。
 - 写真認証は端末カメラで撮影し、RTMPoseによる最終判定APIへ送ります。
-- 撮影中はMediaPipe Pose LandmarkerをWeb Workerで実行し、最大4人の人数と骨格をガイド表示します。
-- MediaPipeのWASMとモデルは初回利用時に外部配信元から読み込みます。読み込みに失敗しても撮影とRTMPose判定は利用できます。
+- 撮影中はMoveNet MultiPose Lightningを実行し、最大4人の人数と骨格をガイド表示します。
+- MoveNetモデルは初回利用時に外部配信元から読み込みます。読み込みに失敗しても撮影とRTMPose判定は利用できます。
 - 解除トークンはタブの sessionStorage に保存し、更新後も最大12時間維持します。
 - 画像はブラウザでJPEGへ正規化してから、発行されたアップロードURLへ直接PUTします。
 - Googleログインとフォルダ削除は未接続です。

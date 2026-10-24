@@ -262,7 +262,7 @@ export function CameraPage() {
                 : '鍵写真は' + (folder?.people_count ?? '—') + '人'}
             </span>
             <small>
-              {guideEnabled ? 'MediaPipe撮影ガイド' : '撮影ガイドOFF'}
+              {guideEnabled ? 'MoveNet撮影ガイド' : '撮影ガイドOFF'}
             </small>
           </div>
           <button

@@ -65,6 +65,25 @@ describe('PoseGuideStabilizer', () => {
     expect(second.poses[1].landmarks[11].x).toBeGreaterThan(0.6)
   })
 
+  it('keeps three people visible when their detector order changes', () => {
+    const stabilizer = new PoseGuideStabilizer()
+    stabilizer.update([poseAt(0.2), poseAt(0.5), poseAt(0.8)], 0)
+    const result = stabilizer.update(
+      [poseAt(0.78), poseAt(0.22), poseAt(0.52)],
+      125,
+    )
+
+    expect(result.detectedCount).toBe(3)
+    expect(result.poses).toHaveLength(3)
+    expect(result.poses.map((pose) => pose.landmarks[11].x)).toEqual(
+      expect.arrayContaining([
+        expect.closeTo(0.2, 1),
+        expect.closeTo(0.5, 1),
+        expect.closeTo(0.8, 1),
+      ]),
+    )
+  })
+
   it('requires repeated frames before changing the displayed count', () => {
     const stabilizer = new PoseGuideStabilizer()
 
