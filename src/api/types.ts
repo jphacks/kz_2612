@@ -14,6 +14,7 @@ export interface GuidePerson {
   position: number
   angles: Record<string, number | null>
   points: Record<string, [number, number] | null>
+  face_registered: boolean
 }
 
 export interface CapsuleDetail extends CapsuleSummary {
@@ -57,7 +58,18 @@ export type OpenFailureReason =
   | 'pose_mismatch'
   | 'body_not_visible'
   | 'no_person'
+  | 'face_not_visible'
+  | 'face_mismatch'
   | null
+
+export interface FacePersonResult {
+  position: number
+  visible: boolean
+  checked: boolean
+  ok: boolean
+  similarity: number | null
+  others: number | null
+}
 
 export interface MatchResult {
   ok: boolean
@@ -67,6 +79,7 @@ export interface MatchResult {
   expected_people: number
   detected_people: number
   mirrored: boolean
+  faces: FacePersonResult[]
 }
 
 export interface OpenResponse {

@@ -36,6 +36,30 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : '処理に失敗しました。もう一度お試しください。'
 }
 
+function facePositionLabel(position: number, total: number) {
+  return total === 1 ? 'あなた' : `左から${position + 1}人目`
+}
+
+function faceResultLabel(face: {
+  visible: boolean
+  checked: boolean
+  ok: boolean
+}) {
+  if (!face.checked) {
+    return face.visible ? '顔を登録しました' : '顔は未登録です'
+  }
+  if (!face.visible) return '顔が見えません'
+  return face.ok ? '顔が一致しました' : '顔が一致しません'
+}
+
+function faceResultSucceeded(face: {
+  visible: boolean
+  checked: boolean
+  ok: boolean
+}) {
+  return face.ok && (face.checked || face.visible)
+}
+
 export function UnlockPage() {
   const { folderId } = useParams()
   const navigate = useNavigate()
@@ -49,6 +73,8 @@ export function UnlockPage() {
 
   const activeSession = folderId ? getUnlockSession(folderId) : null
   const peopleCount = folder?.people_count ?? 0
+  const registeredFaceCount =
+    folder?.guide.filter((person) => person.face_registered).length ?? 0
 
   return (
     <AppShell>
@@ -75,17 +101,22 @@ export function UnlockPage() {
           </p>
           <h1>みんなでポーズを<br />再現して開こう</h1>
           <p>
-            鍵写真と同じ人数・立ち位置・ポーズをカメラの前で再現します。
-            同じ人である必要はありません。
+            鍵写真と同じメンバーで、同じ立ち位置・ポーズをカメラの前で再現します。
+            ポーズが合うと顔も照合します。
           </p>
+          {folder && registeredFaceCount < peopleCount && (
+            <small className="face-registration-note">
+              顔が未登録の人は、最初に開いたときの顔を記憶します。
+            </small>
+          )}
         </div>
 
         {error && <div className="api-error" role="alert">{error}</div>}
 
         <Card className="how-to-card">
-          <span><i>1</i>{peopleCount || '同じ人数'}人でカメラの前に並ぶ</span>
+          <span><i>1</i>鍵写真と同じメンバーで並ぶ</span>
           <ChevronRight size={16} />
-          <span><i>2</i>鍵写真のポーズに合わせる</span>
+          <span><i>2</i>顔を向けてポーズを合わせる</span>
         </Card>
 
         <div className="unlock-actions">
@@ -128,7 +159,7 @@ export function CameraPermissionPage() {
         </div>
         <div className="permission-copy">
           <h1>カメラを使います</h1>
-          <p>写真のポーズを再現するために、カメラへのアクセスを許可してください。</p>
+          <p>ポーズと顔を照合するために、カメラへのアクセスを許可してください。</p>
         </div>
         <div className="privacy-list">
           <span>
@@ -141,7 +172,7 @@ export function CameraPermissionPage() {
           </span>
           <span>
             <Users size={20} />
-            <span><strong>顔は見ません</strong><small>人数とポーズだけを比較します</small></span>
+            <span><strong>顔の特徴を照合</strong><small>顔の切り抜きではなく、特徴量で比較します</small></span>
           </span>
         </div>
         <div className="permission-actions">
@@ -348,7 +379,7 @@ export function CameraPage() {
               {processing
                 ? 'そのまま待ってね'
                 : countMatches
-                  ? 'ポーズを合わせよう'
+                  ? '顔を向けてポーズを合わせよう'
                   : '撮影できます'}
             </small>
           </div>
@@ -382,6 +413,7 @@ export function ResultPage() {
   const navigate = useNavigate()
   const result = folderId ? getAuthResult(folderId) : null
   const success = Boolean(result?.ok)
+  const faceResults = result?.result.faces ?? []
 
   if (!result) {
     return (
@@ -421,6 +453,42 @@ export function ResultPage() {
               <img className="comparison__photo" src={result.opened.attempt_photo_url} alt="認証時の写真" />
             </div>
           </div>
+        )}
+
+        {faceResults.length > 0 && (
+          <Card className="face-result-card">
+            <div className="face-result-card__heading">
+              <ShieldCheck size={20} />
+              <div>
+                <strong>顔認証</strong>
+                <small>鍵写真と顔の特徴を照合しました</small>
+              </div>
+            </div>
+            <div className="face-result-list" aria-label="顔認証結果">
+              {faceResults.map((face) => (
+                <div
+                  className={
+                    'face-result-row ' +
+                    (faceResultSucceeded(face) ? 'is-ok' : 'is-failed')
+                  }
+                  key={face.position}
+                >
+                  <span className="face-result-row__mark">
+                    {faceResultSucceeded(face) ? <Check size={15} /> : <X size={15} />}
+                  </span>
+                  <div>
+                    <strong>{facePositionLabel(face.position, faceResults.length)}</strong>
+                    <small>{faceResultLabel(face)}</small>
+                  </div>
+                  {face.checked && face.similarity !== null && (
+                    <span className="face-result-row__score">
+                      類似度 {face.similarity.toFixed(2)}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </Card>
         )}
 
         {success && (

@@ -1403,10 +1403,19 @@ p {
   letter-spacing: -0.05em;
 }
 
-.unlock-copy > p:last-child {
+.unlock-copy > p:not(.eyebrow) {
   color: var(--muted);
   font-size: 12px;
   line-height: 1.75;
+}
+
+.face-registration-note {
+  display: block;
+  margin-top: 8px;
+  color: var(--accent-dark);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.6;
 }
 
 .how-to-card {
@@ -1964,6 +1973,93 @@ p {
   color: var(--accent);
   background: var(--accent-soft);
   box-shadow: none;
+}
+
+.face-result-card {
+  display: grid;
+  gap: 13px;
+  margin-top: 14px;
+  padding: 15px;
+  box-shadow: none;
+}
+
+.face-result-card + .session-card {
+  margin-top: 10px;
+}
+
+.face-result-card__heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--accent);
+}
+
+.face-result-card__heading > div {
+  display: grid;
+  gap: 2px;
+  color: var(--ink);
+}
+
+.face-result-card__heading strong {
+  font-size: 12px;
+}
+
+.face-result-card__heading small {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.face-result-list {
+  display: grid;
+  gap: 7px;
+}
+
+.face-result-row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 10px;
+  border-radius: 12px;
+  background: var(--green-soft);
+}
+
+.face-result-row.is-failed {
+  background: var(--danger-soft);
+}
+
+.face-result-row__mark {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 10px;
+  color: #fff;
+  background: var(--green);
+}
+
+.face-result-row.is-failed .face-result-row__mark {
+  background: var(--danger);
+}
+
+.face-result-row > div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.face-result-row strong {
+  font-size: 10px;
+}
+
+.face-result-row small,
+.face-result-row__score {
+  color: var(--muted);
+  font-size: 8px;
+}
+
+.face-result-row__score {
+  white-space: nowrap;
 }
 
 .session-card div {

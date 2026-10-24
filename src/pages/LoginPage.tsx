@@ -62,7 +62,7 @@ export function LoginPage() {
 
         <div className="login-feature">
           <Camera size={18} />
-          <span>写真認証は本人確認ではなく、ポーズを楽しむ仕掛けです</span>
+          <span>写真認証では、鍵写真のポーズと顔の特徴を照合します</span>
         </div>
       </div>
     </AppShell>
