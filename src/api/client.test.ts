@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { getContents, listCapsules } from './client'
+import { API_BASE_URL, getContents, listCapsules } from './client'
 
 function jsonResponse(value: unknown) {
   return {
@@ -22,7 +22,7 @@ describe('API client', () => {
 
     expect(fetchMock).toHaveBeenCalledOnce()
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
-    expect(url).toBe('http://localhost:8000/capsules')
+    expect(url).toBe(API_BASE_URL + '/capsules')
     expect(new Headers(init.headers).get('X-User-Id')).toBe('demo-user')
   })
 

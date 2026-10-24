@@ -13,9 +13,9 @@ export async function createMediaPipePoseLandmarker(
   const sharedOptions = {
     runningMode: 'VIDEO' as const,
     numPoses,
-    minPoseDetectionConfidence: 0.5,
-    minPosePresenceConfidence: 0.5,
-    minTrackingConfidence: 0.5,
+    minPoseDetectionConfidence: 0.35,
+    minPosePresenceConfidence: 0.35,
+    minTrackingConfidence: 0.3,
     outputSegmentationMasks: false,
   }
 

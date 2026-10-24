@@ -20,7 +20,7 @@ describe('PoseGuideStabilizer', () => {
 
     expect(first.poses[0].landmarks[11].displayed).toBe(false)
     expect(second.poses[0].landmarks[11].displayed).toBe(true)
-    expect(second.poses[0].landmarks[11].x).toBeCloseTo(0.25, 2)
+    expect(second.poses[0].landmarks[11].x).toBeCloseTo(0.22, 2)
     expect(second.detectedCount).toBe(1)
   })
 
@@ -30,12 +30,27 @@ describe('PoseGuideStabilizer', () => {
     stabilizer.update([poseAt(0.3)], 125)
 
     const missing = stabilizer.update([], 250)
-    const expired = stabilizer.update([], 700)
+    const expired = stabilizer.update([], 1400)
 
     expect(missing.poses).toHaveLength(1)
-    expect(missing.poses[0].opacity).toBeCloseTo(0.75)
+    expect(missing.poses[0].opacity).toBeCloseTo(0.9, 1)
     expect(missing.detectedCount).toBe(1)
     expect(expired.poses).toHaveLength(0)
+  })
+
+  it('keeps visible joints through a short low-confidence interval', () => {
+    const stabilizer = new PoseGuideStabilizer()
+    stabilizer.update([poseAt(0.3)], 0)
+    stabilizer.update([poseAt(0.3)], 125)
+
+    let result = stabilizer.update([poseAt(0.3, 0)], 250)
+    for (let frame = 2; frame <= 7; frame += 1) {
+      result = stabilizer.update([poseAt(0.3, 0)], 125 * (frame + 1))
+    }
+    expect(result.poses[0].landmarks[11].displayed).toBe(true)
+
+    result = stabilizer.update([poseAt(0.3, 0)], 1125)
+    expect(result.poses[0].landmarks[11].displayed).toBe(false)
   })
 
   it('keeps person IDs when detector order changes', () => {
