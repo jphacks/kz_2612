@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import os
 from functools import lru_cache
 from pathlib import Path
 
 from fastapi import Header
 
+from app.pose.base import Detector
 from app.pose.config import MatchConfig
-from app.pose.detector import PoseDetector
 from app.repository import DynamoItemStore, JsonItemStore, Repository
 from app.settings import Settings, get_settings
 from app.storage import LocalStorage, S3Storage, Storage
@@ -37,10 +38,16 @@ def get_repository() -> Repository:
 
 
 @lru_cache
-def get_detector() -> PoseDetector:
+def get_detector() -> Detector:
     # Lambda ではコンテナが再利用される間、モデルを読み込んだまま使い回す
     config = get_match_config()
-    return PoseDetector(min_visibility=config.min_visibility, min_joints_per_person=config.min_joints_per_person)
+    if os.environ.get("EMO_POSE_ENGINE", "rtmpose") == "mediapipe":
+        from app.pose.detector import PoseDetector
+
+        return PoseDetector(min_visibility=config.min_visibility, min_points_per_person=config.min_points_per_person)
+    from app.pose.rtm_detector import RtmPoseDetector
+
+    return RtmPoseDetector(min_points_per_person=config.min_points_per_person)
 
 
 @lru_cache

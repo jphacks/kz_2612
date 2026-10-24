@@ -7,12 +7,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from dataclasses import replace
 from pathlib import Path
 
 from app.pose.config import MatchConfig
-from app.pose.detector import PoseDetector, PoseExtractionError, draw_overlay, load_image
+from app.pose.base import PoseExtractionError, draw_overlay, load_image
 from app.pose.matcher import match_poses
 
 
@@ -22,8 +23,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("attempt", type=Path, help="今撮った写真")
     parser.add_argument("--tolerance", type=float, help="平均角度差の許容値（度）")
     parser.add_argument("--max-joint", type=float, help="1関節あたりのずれの上限（度）")
-    parser.add_argument("--detection-confidence", type=float, help="人物検出のしきい値（既定0.2）")
-    parser.add_argument("--mirror",action="store_true", help="鏡像も一致とみなす")
+    parser.add_argument("--engine", choices=["rtmpose", "mediapipe"], default=os.environ.get("EMO_POSE_ENGINE", "rtmpose"),
+                        help="姿勢推定エンジン（既定 rtmpose）")
+    parser.add_argument("--detection-confidence", type=float, help="人物検出のしきい値（mediapipe のみ、既定0.2）")
+    parser.add_argument("--mirror", action="store_true", help="鏡像も一致とみなす")
     parser.add_argument("--overlay-dir", type=Path, help="骨格を重ねたプレビュー画像の出力先")
     args = parser.parse_args(argv)
     # Windows のコンソール（cp932）でも日本語の JSON が化けないように
@@ -37,7 +40,15 @@ def main(argv: list[str] | None = None) -> int:
     if args.mirror:
         config = replace(config, allow_mirror=True)
 
-    detector = PoseDetector(min_visibility=config.min_visibility, detection_confidence=args.detection_confidence)
+    if args.engine == "mediapipe":
+        from app.pose.detector import PoseDetector
+
+        detector = PoseDetector(min_visibility=config.min_visibility, detection_confidence=args.detection_confidence,
+                                min_points_per_person=config.min_points_per_person)
+    else:
+        from app.pose.rtm_detector import RtmPoseDetector
+
+        detector = RtmPoseDetector(min_points_per_person=config.min_points_per_person)
     key_image = load_image(args.key)
     attempt_image = load_image(args.attempt)
 

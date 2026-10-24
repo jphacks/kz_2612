@@ -1,4 +1,8 @@
-"""関節座標から6関節（左右の肘・肩・膝）の角度を求める。
+"""関節座標からポーズの特徴を取り出す。
+
+- 点の位置（主）: ひじ・手首・ひざ・足首が、両肩の中心から見てどこにあるか（肩幅を1とする）。
+  見えている点だけで比べられるので、片方の手が隠れたポーズでも鍵にできる
+- 関節の角度（補助）: 左右の肘・肩・膝
 
 左右は MediaPipe と同じく「写っている本人から見た左右」。
 """
@@ -40,6 +44,15 @@ GUIDE_POINTS: dict[str, int] = {
     "left_ankle": L_ANKLE, "right_ankle": R_ANKLE,
 }
 
+# 位置を比べる点（両肩の中心が原点、肩幅が1）
+REL_POINTS: dict[str, int] = {
+    "left_elbow": L_ELBOW, "right_elbow": R_ELBOW,
+    "left_wrist": L_WRIST, "right_wrist": R_WRIST,
+    "left_knee": L_KNEE, "right_knee": R_KNEE,
+    "left_ankle": L_ANKLE, "right_ankle": R_ANKLE,
+}
+MIRROR_POINT = {name: name.replace("left_", "@").replace("right_", "left_").replace("@", "right_") for name in REL_POINTS}
+
 # 鏡像のときに入れ替わる関節
 MIRROR_JOINT = {
     "left_elbow": "right_elbow",
@@ -66,6 +79,9 @@ class PersonPose:
     angles: dict[str, float | None]
     # 腰の中心の x 座標（0〜1）。左から並べるために使う
     hip_center_x: float
+    # 点の位置（両肩の中心が原点、肩幅が1、y は下向きが正）。写っていない点は None。
+    # 両肩が見えないときは空（位置では比べられない）
+    rel: dict[str, list[float] | None] = field(default_factory=dict)
     # プレビュー描画用の座標。DynamoDB には保存しない
     landmarks: list[Landmark] = field(default_factory=list, repr=False)
 
@@ -73,11 +89,16 @@ class PersonPose:
         return {
             "angles": {k: (None if v is None else round(v, 1)) for k, v in self.angles.items()},
             "hip_center_x": round(self.hip_center_x, 4),
+            "rel": {k: (None if v is None else [round(v[0], 3), round(v[1], 3)]) for k, v in self.rel.items()},
         }
 
     def measurable_joints(self) -> int:
         """角度が測れた関節の数。"""
         return sum(v is not None for v in self.angles.values())
+
+    def visible_points(self) -> int:
+        """位置を比べられる点の数（両肩が見えていないと0）。"""
+        return sum(v is not None for v in self.rel.values())
 
     def guide_points(self) -> dict[str, list[float] | None]:
         """開封カメラのガイド表示用に、体の12点だけを正規化座標で返す（顔の点は含めない）。"""
@@ -97,6 +118,8 @@ class PersonPose:
         return cls(
             angles={k: (None if v is None else float(v)) for k, v in data["angles"].items()},
             hip_center_x=float(data["hip_center_x"]),
+            # 点の位置で比べる前に作った鍵には rel が無い（そのときは角度だけで比べる）
+            rel={k: (None if v is None else [float(v[0]), float(v[1])]) for k, v in data.get("rel", {}).items()},
         )
 
 
@@ -145,8 +168,31 @@ def person_pose_from_landmarks(
         else:
             angles[name] = joint_angle(point(a), point(v), point(b))
 
-    hip_center_x = (landmarks[L_HIP].x + landmarks[R_HIP].x) / 2
-    return PersonPose(angles=angles, hip_center_x=hip_center_x, landmarks=list(landmarks))
+    # 並び順に使う位置。胸から上だけの写真では腰が画面外で位置があてにならないので、肩の中心を使う
+    if min(landmarks[L_HIP].visibility, landmarks[R_HIP].visibility) >= min_visibility:
+        hip_center_x = (landmarks[L_HIP].x + landmarks[R_HIP].x) / 2
+    elif min(landmarks[L_SHOULDER].visibility, landmarks[R_SHOULDER].visibility) >= min_visibility:
+        hip_center_x = (landmarks[L_SHOULDER].x + landmarks[R_SHOULDER].x) / 2
+    else:
+        hip_center_x = (landmarks[L_HIP].x + landmarks[R_HIP].x) / 2
+    return PersonPose(
+        angles=angles, hip_center_x=hip_center_x, rel=_rel_points(landmarks, point, min_visibility),
+        landmarks=list(landmarks),
+    )
+
+
+def _rel_points(landmarks: Sequence[Landmark], point, min_visibility: float) -> dict[str, list[float] | None]:
+    """両肩の中心を原点、肩幅を1とした各点の位置。カメラとの距離や写る大きさが違っても比べられる。"""
+    if min(landmarks[L_SHOULDER].visibility, landmarks[R_SHOULDER].visibility) < min_visibility:
+        return {}
+    center = (point(L_SHOULDER) + point(R_SHOULDER)) / 2
+    width = float(np.linalg.norm(point(L_SHOULDER) - point(R_SHOULDER)))
+    if width < 1e-6:
+        return {}
+    return {
+        name: (list(((point(i) - center) / width).tolist()) if landmarks[i].visibility >= min_visibility else None)
+        for name, i in REL_POINTS.items()
+    }
 
 
 def sort_left_to_right(people: list[PersonPose]) -> list[PersonPose]:
@@ -158,5 +204,6 @@ def mirrored(person: PersonPose) -> PersonPose:
     return PersonPose(
         angles={MIRROR_JOINT[k]: v for k, v in person.angles.items()},
         hip_center_x=1.0 - person.hip_center_x,
+        rel={MIRROR_POINT[k]: (None if v is None else [-v[0], v[1]]) for k, v in person.rel.items()},
         landmarks=person.landmarks,
     )

@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends
 from app.deps import current_user, get_repository, settings_dep
 from app.errors import ApiError
 from app.repository import Repository
-from app.routers.capsules import ERRORS, _get_capsule_for_member, _now, _parse_dt, _summary, _today_jst
+from app.routers.capsules import ERRORS, _days_until, _get_capsule_for_member, _now, _open_date, _parse_dt, _summary
 from app.schemas import CapsuleSummary, ErrorResponse, InviteCreated, InvitePreview, MemberOut
 from app.settings import Settings
 
@@ -25,7 +25,6 @@ log = logging.getLogger("emo")
 
 INVITE_ERRORS = {
     404: {"model": ErrorResponse},
-    409: {"model": ErrorResponse},
     410: {"model": ErrorResponse},
 }
 
@@ -47,7 +46,7 @@ def _valid_invite(repo: Repository, token: str) -> tuple[dict, dict]:
     "/capsules/{capsule_id}/invites",
     response_model=InviteCreated,
     status_code=201,
-    responses={**ERRORS, 409: {"model": ErrorResponse}},
+    responses=ERRORS,
     summary="招待リンクを発行（作成者のみ）",
 )
 def create_invite(
@@ -56,11 +55,9 @@ def create_invite(
     repo: Repository = Depends(get_repository),
     settings: Settings = Depends(settings_dep),
 ) -> InviteCreated:
-    capsule, member = _get_capsule_for_member(repo, capsule_id, user["user_id"])
+    _, member = _get_capsule_for_member(repo, capsule_id, user["user_id"])
     if member["role"] != "owner":
         raise ApiError(403, "not_owner", "招待リンクを作れるのは、カプセルを作った人だけだよ")
-    if capsule["status"] == "opened":
-        raise ApiError(409, "already_opened", "このカプセルはもう開いたので、新しく招待できないよ")
 
     expires_at = _now() + dt.timedelta(days=settings.invite_days)
     invite = {
@@ -88,12 +85,12 @@ def get_invite(
     repo: Repository = Depends(get_repository),
 ) -> InvitePreview:
     invite, capsule = _valid_invite(repo, token)
-    open_date = dt.date.fromisoformat(capsule["open_date"])
+    open_date = _open_date(capsule)
     return InvitePreview(
         capsule_id=capsule["capsule_id"],
         capsule_name=capsule["name"],
         open_date=open_date,
-        days_until_open=max(0, (open_date - _today_jst()).days),
+        days_until_open=_days_until(open_date),
         people_count=len(capsule["key_pose"]["people"]),
         members_count=len(repo.list_members(capsule["capsule_id"])),
         invited_by=invite["created_by"],
@@ -119,9 +116,7 @@ def accept_invite(
     if existing:
         # 2回押しても、作成者が自分のリンクを開いてもエラーにしない
         return _summary(capsule, existing["role"])
-    if capsule["status"] == "opened":
-        # 開封後に参加できると、リンクを知っているだけで中身が見られてしまう
-        raise ApiError(409, "already_opened", "このカプセルはもう開いちゃったので、参加できないよ")
+    # 開封済みでも参加できる。中身を見るにはポーズでの解除が要るので、リンクだけでは見られない
 
     repo.add_member(capsule_id, user["user_id"], "member", user.get("email"))
     log.info(json.dumps({"event": "member_joined", "capsule_id": capsule_id}))

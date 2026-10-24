@@ -98,7 +98,7 @@ def test_full_flow(env):
     assert capsule["people_count"] == 2
     assert capsule["status"] == "locked"
     assert capsule["can_open_now"] is True
-    assert capsule["attempts_left"] == 5
+    assert capsule["attempts_left"] is None  # 既定はロックなし
     assert set(capsule["guide"][0]["angles"]) == set(BASE)
     assert client.get(capsule["preview_url"]).status_code == 200
 
@@ -112,7 +112,9 @@ def test_full_flow(env):
     detail = client.get(f"/capsules/{cid}", headers=h).json()
     assert detail["contents_count"] == 2
     assert "contents" not in detail  # 開封前に中身は返さない
-    assert client.get(f"/capsules/{cid}/contents", headers=h).status_code == 409
+    res = client.get(f"/capsules/{cid}/contents", headers=h)
+    assert res.status_code == 401
+    assert res.json()["error"]["code"] == "unlock_required"
 
     # ポーズ違い
     detector.people = [pose(0.3), pose(0.7, right_elbow=60.0)]
@@ -120,14 +122,15 @@ def test_full_flow(env):
     assert res["ok"] is False
     assert res["result"]["reason"] == "pose_mismatch"
     assert "右の人の右ひじ" in res["result"]["message"]
-    assert res["attempts_left"] == 4
+    assert res["attempts_left"] is None
     assert res["opened"] is None
+    assert res["unlock"] is None
 
     # 一致
     detector.people = [pose(0.3), pose(0.7)]
     res = open_with(client, cid).json()
     assert res["ok"] is True
-    assert res["attempts_left"] == 5
+    assert res["attempts_left"] is None
     opened = res["opened"]
     assert opened["url_expires_in"] == 60
     texts = [c["text"] for c in opened["contents"] if c["type"] == "message"]
@@ -136,13 +139,140 @@ def test_full_flow(env):
     assert client.get(photo_url).content == png()
 
     assert client.get(f"/capsules/{cid}", headers=h).json()["status"] == "opened"
-    assert len(client.get(f"/capsules/{cid}/contents", headers=h).json()["contents"]) == 2
-    album = client.get(f"/capsules/{cid}/album", headers=h).json()
+
+    # 解除セッションでライブラリを使う
+    assert res["unlock"]["token"]
+    u = {**h, "X-Unlock-Token": res["unlock"]["token"]}
+    assert client.get(f"/capsules/{cid}/contents", headers=h).status_code == 401  # トークンなし
+    assert len(client.get(f"/capsules/{cid}/contents", headers=u).json()["contents"]) == 2
+    album = client.get(f"/capsules/{cid}/album", headers=u).json()
     assert len(album["entries"]) == 1
 
-    res = client.post(f"/capsules/{cid}/contents", json={"type": "message", "text": "追加"}, headers=h)
-    assert res.status_code == 409
-    assert res.json()["error"]["code"] == "already_opened"
+    # 解除後も写真を追加できる
+    more = upload(client, "content")
+    assert client.post(f"/capsules/{cid}/contents", json={"type": "photo", "s3_key": more}, headers=h).status_code == 201
+    assert len(client.get(f"/capsules/{cid}/contents", headers=u).json()["contents"]) == 3
+
+
+def unlock(client, cid, user="alice") -> dict:
+    res = open_with(client, cid, user).json()
+    assert res["ok"], res
+    return {"X-User-Id": user, "X-Unlock-Token": res["unlock"]["token"]}
+
+
+def add_photo(client, cid, user="alice") -> str:
+    key = upload(client, "content", user)
+    res = client.post(f"/capsules/{cid}/contents", json={"type": "photo", "s3_key": key}, headers={"X-User-Id": user})
+    assert res.status_code == 201, res.text
+    return res.json()["content_id"]
+
+
+def test_delete_photo(env, tmp_path):
+    client, _, _ = env
+    cid = create(client).json()["capsule_id"]
+    content_id = add_photo(client, cid)
+    u = unlock(client, cid)
+    photo_url = client.get(f"/capsules/{cid}/contents", headers=u).json()["contents"][0]["url"]
+    assert client.get(photo_url).status_code == 200
+
+    # 解除していないと消せない
+    res = client.delete(f"/capsules/{cid}/contents/{content_id}", headers={"X-User-Id": "alice"})
+    assert res.status_code == 401
+
+    assert client.delete(f"/capsules/{cid}/contents/{content_id}", headers=u).status_code == 204
+    assert client.get(f"/capsules/{cid}/contents", headers=u).json()["contents"] == []
+    # 画像そのものも消える
+    assert not any((tmp_path / "objects" / "uploads" / "alice" / "content").glob("*"))
+    res = client.delete(f"/capsules/{cid}/contents/{content_id}", headers=u)
+    assert res.status_code == 404
+    assert res.json()["error"]["code"] == "content_not_found"
+
+
+def test_only_author_or_owner_can_delete(env):
+    client, _, _ = env
+    cid = create(client).json()["capsule_id"]
+    token = client.post(f"/capsules/{cid}/invites", headers={"X-User-Id": "alice"}).json()["token"]
+    for user in ("bob", "carol"):
+        client.post(f"/invites/{token}/accept", headers={"X-User-Id": user})
+    alices = add_photo(client, cid, "alice")
+    bobs = add_photo(client, cid, "bob")
+
+    carol = unlock(client, cid, "carol")
+    res = client.delete(f"/capsules/{cid}/contents/{bobs}", headers=carol)
+    assert res.status_code == 403
+    assert res.json()["error"]["code"] == "not_author"
+
+    bob = unlock(client, cid, "bob")
+    assert client.delete(f"/capsules/{cid}/contents/{alices}", headers=bob).status_code == 403
+    assert client.delete(f"/capsules/{cid}/contents/{bobs}", headers=bob).status_code == 204
+    # 作成者は誰の写真でも消せる
+    other = add_photo(client, cid, "carol")
+    assert client.delete(f"/capsules/{cid}/contents/{other}", headers=unlock(client, cid, "alice")).status_code == 204
+
+
+def test_unlock_token_is_bound_to_user_and_capsule(env):
+    client, _, _ = env
+    cid = create(client).json()["capsule_id"]
+    other = create(client).json()["capsule_id"]
+    token = client.post(f"/capsules/{cid}/invites", headers={"X-User-Id": "alice"}).json()["token"]
+    client.post(f"/invites/{token}/accept", headers={"X-User-Id": "bob"})
+    u = unlock(client, cid)
+
+    # 別のカプセルには使えない
+    assert client.get(f"/capsules/{other}/contents", headers=u).status_code == 401
+    # 別の人（メンバーでも）には使えない
+    stolen = {**u, "X-User-Id": "bob"}
+    assert client.get(f"/capsules/{cid}/contents", headers=stolen).status_code == 401
+
+
+def test_unlock_expires(env):
+    client, _, _ = env
+    cid = create(client).json()["capsule_id"]
+    u = unlock(client, cid)
+    assert client.get(f"/capsules/{cid}/contents", headers=u).status_code == 200
+    # 期限を過去にずらす
+    repo = app.dependency_overrides[deps.get_repository]()
+    session = repo.get_unlock_session(u["X-Unlock-Token"])
+    repo.create_unlock_session({**session, "token": u["X-Unlock-Token"], "expires_at": "2000-01-01T00:00:00+00:00"})
+    res = client.get(f"/capsules/{cid}/contents", headers=u)
+    assert res.status_code == 401
+    assert res.json()["error"]["code"] == "unlock_expired"
+
+
+def test_no_lock_and_no_unlock_expiry_by_default(env):
+    client, detector, _ = env
+    cid = create(client).json()["capsule_id"]
+    assert client.get(f"/capsules/{cid}", headers={"X-User-Id": "alice"}).json()["attempts_left"] is None
+
+    # 何回失敗してもロックしない
+    detector.people = [pose(0.5)]
+    for _ in range(8):
+        res = open_with(client, cid)
+        assert res.status_code == 200
+        assert res.json()["attempts_left"] is None
+
+    # 解除の期限なし
+    detector.people = [pose(0.3), pose(0.7)]
+    res = open_with(client, cid).json()
+    assert res["unlock"]["expires_at"] is None
+    u = {"X-User-Id": "alice", "X-Unlock-Token": res["unlock"]["token"]}
+    assert client.get(f"/capsules/{cid}/contents", headers=u).status_code == 200
+
+
+def test_open_date_is_optional(env):
+    client, _, _ = env
+    key = upload(client, "key")
+    res = client.post("/capsules", json={"name": "いつでも", "key_photo_s3_key": key}, headers={"X-User-Id": "alice"})
+    assert res.status_code == 201, res.text
+    capsule = res.json()
+    assert capsule["open_date"] is None
+    assert capsule["days_until_open"] is None
+    assert capsule["can_open_now"] is True
+    later = create(client, open_date=TODAY + dt.timedelta(days=3)).json()["capsule_id"]
+    # 一覧は開封日の近い順、開封日なしは後ろ
+    ids = [c["capsule_id"] for c in client.get("/capsules", headers={"X-User-Id": "alice"}).json()]
+    assert ids == [later, capsule["capsule_id"]]
+    assert open_with(client, capsule["capsule_id"]).json()["ok"] is True
 
 
 def test_not_open_yet_and_demo_override(env):
@@ -159,8 +289,9 @@ def test_not_open_yet_and_demo_override(env):
     assert open_with(client, cid).json()["ok"] is True
 
 
-def test_lock_after_five_failures(env):
-    client, detector, _ = env
+def test_lock_after_five_failures_when_enabled(env):
+    client, detector, settings = env
+    app.dependency_overrides[deps.settings_dep] = lambda: replace(settings, max_failures=5)
     cid = create(client).json()["capsule_id"]
     detector.people = [pose(0.5)]  # 人数違い
     lefts = [open_with(client, cid).json()["attempts_left"] for _ in range(5)]
@@ -172,7 +303,8 @@ def test_lock_after_five_failures(env):
 
 
 def test_no_person_does_not_count_as_failure(env):
-    client, detector, _ = env
+    client, detector, settings = env
+    app.dependency_overrides[deps.settings_dep] = lambda: replace(settings, max_failures=5)
     cid = create(client).json()["capsule_id"]
     detector.people = []
     res = open_with(client, cid).json()

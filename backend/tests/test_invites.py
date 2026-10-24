@@ -100,17 +100,18 @@ def test_unknown_and_expired_invite(env):
         assert res.json()["error"]["code"] == "invite_expired"
 
 
-def test_cannot_join_or_invite_after_opened(env):
+def test_join_after_opened_still_needs_pose(env):
+    # 開封済みでも参加できるが、中身を見るには自分でポーズを解除する必要がある
     client, _, _ = env
     cid = create(client).json()["capsule_id"]
     token = invite(client, cid).json()["token"]
     assert open_with(client, cid).json()["ok"] is True
 
-    res = client.post(f"/invites/{token}/accept", headers=B)
-    assert res.status_code == 409
-    assert res.json()["error"]["code"] == "already_opened"
-    assert client.get(f"/capsules/{cid}/contents", headers=B).status_code == 403
-    assert invite(client, cid).status_code == 409
+    assert client.post(f"/invites/{token}/accept", headers=B).status_code == 200
+    res = client.get(f"/capsules/{cid}/contents", headers=B)
+    assert res.status_code == 401
+    assert res.json()["error"]["code"] == "unlock_required"
+    assert invite(client, cid).status_code == 201
 
 
 def test_expires_at_is_in_the_future_by_default(env):
