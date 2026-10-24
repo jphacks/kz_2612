@@ -51,6 +51,8 @@ def env(tmp_path):
         deps.get_storage: lambda: storage,
         deps.get_repository: lambda: repo,
         deps.get_detector: lambda: detector,
+        # 顔の判定は test_face_api.py で偽物に差し替えて試す。ここでは切っておく
+        deps.get_face_encoder: lambda: None,
     }
     storage = LocalStorage(tmp_path, "http://testserver")
     repo = Repository(JsonItemStore(None))
@@ -188,7 +190,7 @@ def test_delete_photo(env, tmp_path):
     assert res.json()["error"]["code"] == "content_not_found"
 
 
-def test_only_author_or_owner_can_delete(env):
+def test_any_member_can_delete_any_photo(env):
     client, _, _ = env
     cid = create(client).json()["capsule_id"]
     token = client.post(f"/capsules/{cid}/invites", headers={"X-User-Id": "alice"}).json()["token"]
@@ -197,17 +199,69 @@ def test_only_author_or_owner_can_delete(env):
     alices = add_photo(client, cid, "alice")
     bobs = add_photo(client, cid, "bob")
 
+    # 参加者なら、作成者の写真でもほかの人の写真でも消せる
     carol = unlock(client, cid, "carol")
-    res = client.delete(f"/capsules/{cid}/contents/{bobs}", headers=carol)
+    assert client.delete(f"/capsules/{cid}/contents/{alices}", headers=carol).status_code == 204
+    assert client.delete(f"/capsules/{cid}/contents/{bobs}", headers=carol).status_code == 204
+    assert client.get(f"/capsules/{cid}/contents", headers=carol).json()["contents"] == []
+    # 参加者でない人は消せない
+    other = add_photo(client, cid, "bob")
+    res = client.delete(f"/capsules/{cid}/contents/{other}", headers={**carol, "X-User-Id": "mallory"})
     assert res.status_code == 403
-    assert res.json()["error"]["code"] == "not_author"
 
-    bob = unlock(client, cid, "bob")
-    assert client.delete(f"/capsules/{cid}/contents/{alices}", headers=bob).status_code == 403
-    assert client.delete(f"/capsules/{cid}/contents/{bobs}", headers=bob).status_code == 204
-    # 作成者は誰の写真でも消せる
-    other = add_photo(client, cid, "carol")
-    assert client.delete(f"/capsules/{cid}/contents/{other}", headers=unlock(client, cid, "alice")).status_code == 204
+
+def _objects(tmp_path):
+    return sorted(str(p.relative_to(tmp_path / "objects")).replace("\\", "/")
+                  for p in (tmp_path / "objects").rglob("*") if p.is_file())
+
+
+def test_delete_capsule_removes_everything(env, tmp_path):
+    client, detector, _ = env
+    cid = create(client).json()["capsule_id"]
+    keep = create(client).json()["capsule_id"]  # 別のフォルダは残る
+    token = client.post(f"/capsules/{cid}/invites", headers={"X-User-Id": "alice"}).json()["token"]
+    client.post(f"/invites/{token}/accept", headers={"X-User-Id": "bob"})
+    add_photo(client, cid, "alice")
+    add_photo(client, cid, "bob")
+    client.post(f"/capsules/{cid}/contents", json={"type": "message", "text": "また集まろう"}, headers={"X-User-Id": "bob"})
+    detector.people = [pose(0.5)]
+    open_with(client, cid)                       # 開けられなかった撮影
+    detector.people = [pose(0.3), pose(0.7)]
+    bob = unlock(client, cid, "bob")             # 開けた撮影・解除セッション
+
+    repo = app.dependency_overrides[deps.get_repository]()
+    capsule = repo.get_capsule(cid)
+    before = _objects(tmp_path)
+    assert capsule["key_photo_key"] in before and capsule["preview_key"] in before
+
+    # 作成者でなくても、参加者なら消せる
+    assert client.delete(f"/capsules/{cid}", headers={"X-User-Id": "bob"}).status_code == 204
+
+    # DynamoDB 側: このフォルダのアイテムは1つも残らない（別パーティションの招待・解除セッションも）
+    store = repo.store
+    assert store.query(f"CAPSULE#{cid}", "") == []
+    assert repo.get_invite(token) is None
+    assert repo.get_unlock_session(bob["X-Unlock-Token"]) is None
+    assert repo.list_memberships("bob") == []
+    assert [m["capsule_id"] for m in repo.list_memberships("alice")] == [keep]
+    # S3 側: 残るのは別のフォルダの鍵の写真とプレビューだけ
+    kept = repo.get_capsule(keep)
+    assert _objects(tmp_path) == sorted([kept["key_photo_key"], kept["preview_key"]])
+
+    # 消したあとは、どの API でも見つからない
+    for path in (f"/capsules/{cid}", f"/capsules/{cid}/contents", f"/capsules/{cid}/album"):
+        assert client.get(path, headers=bob).status_code == 404
+    assert client.get(f"/invites/{token}", headers={"X-User-Id": "carol"}).status_code == 404
+    assert client.delete(f"/capsules/{cid}", headers={"X-User-Id": "alice"}).status_code == 404
+
+
+def test_only_members_can_delete_capsule(env):
+    client, _, _ = env
+    cid = create(client).json()["capsule_id"]
+    res = client.delete(f"/capsules/{cid}", headers={"X-User-Id": "mallory"})
+    assert res.status_code == 403
+    assert res.json()["error"]["code"] == "not_member"
+    assert client.get(f"/capsules/{cid}", headers={"X-User-Id": "alice"}).status_code == 200
 
 
 def test_unlock_token_is_bound_to_user_and_capsule(env):

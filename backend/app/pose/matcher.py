@@ -17,7 +17,7 @@ from typing import Literal
 from app.pose.angles import MIRROR_JOINT, MIRROR_POINT, PersonPose, mirrored, sort_left_to_right
 from app.pose.config import MatchConfig
 
-Reason = Literal["count_mismatch", "pose_mismatch", "body_not_visible", "no_person"]
+Reason = Literal["count_mismatch", "pose_mismatch", "body_not_visible", "no_person", "face_not_visible", "face_mismatch"]
 
 JOINT_LABELS = {
     "left_elbow": "左ひじ",
@@ -115,6 +115,8 @@ class MatchResult:
     detected_people: int
     mirrored: bool = False
     people: list[PersonResult] = field(default_factory=list)
+    # 顔の判定の結果（立ち位置ごと）。ポーズが合ったときだけ入る
+    faces: list[dict] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
@@ -126,6 +128,7 @@ class MatchResult:
             "detected_people": self.detected_people,
             "mirrored": self.mirrored,
             "people": [p.to_dict() for p in self.people],
+            "faces": self.faces,
         }
 
 

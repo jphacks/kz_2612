@@ -107,6 +107,8 @@
     <div class="status" id="members" style="margin-top:0"></div>
     <button class="secondary" id="inviteBtn">招待リンクを作る</button>
     <div class="status" id="inviteStatus"></div>
+    <button class="secondary" id="deleteCapBtn" style="color:var(--ng);border-color:var(--ng)">このフォルダを削除</button>
+    <div class="status" id="deleteCapStatus"></div>
   </section>
 
   <section>
@@ -338,6 +340,20 @@ $("createBtn").onclick = async () => {
 
 $("capSelect").onchange = (e) => loadCapsule(e.target.value);
 
+// 参加者なら誰でも消せる。鍵の写真・中身・認証まわりのデータがすべて消える
+$("deleteCapBtn").onclick = async () => {
+  if (!current) return;
+  if (!confirm(`「${current.name}」を削除しますか？\n鍵の写真・入れた写真・メッセージ・認証の記録がすべて消え、元に戻せません。メンバー全員から見えなくなります。`)) return;
+  try {
+    const res = await fetch(`${API}/capsules/${current.capsule_id}`, { method: "DELETE", headers: headers() });
+    if (!res.ok) throw new Error((await res.json()).error.message);
+    $("deleteCapStatus").textContent = `「${current.name}」を削除しました`;
+    current = null; unlockToken = null;
+    $("openedSec").classList.add("hidden"); $("librarySec").classList.add("hidden");
+    await refreshList();
+  } catch (e) { $("deleteCapStatus").innerHTML = `<span class="error">${e.message}</span>`; }
+};
+
 $("letterBtn").onclick = async () => {
   const st = $("letterStatus");
   try {
@@ -400,6 +416,14 @@ $("shootBtn").onclick = async () => {
   } finally { $("shootBtn").disabled = false; }
 };
 
+// 顔の判定（ポーズが合ったときだけ結果が来る）。似かたは -1〜1、0.4以上で本人
+function faceChip(f) {
+  if (!f) return "";
+  if (!f.checked) return `<span class="chip" style="background:#999">顔 まだ覚えていない</span>`;
+  if (!f.visible) return `<span class="chip ng">顔 見えない</span>`;
+  return `<span class="chip ${f.ok ? "ok" : "ng"}">顔 ${f.similarity.toFixed(2)}</span>`;
+}
+
 function showResult(res) {
   const r = res.result;
   $("openStatus").textContent = "";
@@ -413,7 +437,8 @@ function showResult(res) {
     <div class="status">左から${p.position + 1}人目：平均ずれ ${p.mean_point_diff === null ? "-" : Math.round(p.mean_point_diff * 100) + "%"}（肩幅に対して）</div>
     <div class="joints">${Object.entries(p.points).map(([k, d]) =>
       `<span class="chip ${d.ok ? "ok" : "ng"}">${POINT_JA[k]} ${Math.round(d.diff * 100)}%</span>`).join("")}${
-      p.missing_joints.map(k => `<span class="chip" style="background:#999">${POINT_JA[k] || k} 見えない</span>`).join("")}</div>`).join("");
+      p.missing_joints.map(k => `<span class="chip" style="background:#999">${POINT_JA[k] || k} 見えない</span>`).join("")}${
+      faceChip((r.faces || []).find(f => f.position === p.position))}</div>`).join("");
   if (res.ok) {
     const o = res.opened;
     $("thenImg").src = o.key_photo_url; $("nowImg").src = o.attempt_photo_url;
@@ -441,11 +466,10 @@ function libApi(path, opts = {}) {
 }
 
 function renderLibrary(contents) {
-  const me = headers()["X-User-Id"], owner = current && current.role === "owner";
+  // 共有フォルダなので、参加者なら誰の写真でも消せる
   const photos = contents.filter(c => c.type === "photo");
   $("library").innerHTML = photos.map(c => `
-    <div class="tile"><img src="${c.url}" alt="">${
-      (owner || c.author_id === me) ? `<button data-id="${c.content_id}">削除</button>` : ""}</div>`).join("")
+    <div class="tile"><img src="${c.url}" alt=""><button data-id="${c.content_id}">削除</button></div>`).join("")
     || `<div class="status">写真はまだありません</div>`;
   $("letters").innerHTML = contents.filter(c => c.type === "message").map(c => `<div class="letter">${esc(c.text)}</div>`).join("");
 }
