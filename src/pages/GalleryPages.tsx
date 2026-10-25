@@ -1,16 +1,13 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import {
   Check,
   ChevronLeft,
   ChevronRight,
-  CloudUpload,
   Download,
   ImagePlus,
-  Info,
   LoaderCircle,
   Settings,
   Trash2,
-  Upload,
   X,
 } from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
@@ -168,7 +165,7 @@ export function GalleryPage() {
       <div className="screen screen--gallery">
         <PageHeader
           title={selecting ? selected.length + '枚を選択' : folder?.name ?? '思い出'}
-          eyebrow={selecting ? 'SELECT PHOTOS' : 'OPEN · 最大12時間'}
+          eyebrow={selecting ? '削除する写真を選ぶ' : 'ひらいたアルバム'}
           backTo="/folders"
           right={
             selecting ? (
@@ -191,9 +188,15 @@ export function GalleryPage() {
         />
 
         {!selecting && (
-          <div className="gallery-summary">
-            <span>{photos.length}枚の思い出</span>
-            {photos.length > 0 && <button type="button" onClick={() => setSelecting(true)}>選択</button>}
+          <div className="album-intro">
+            <p className="album-intro__count">
+              <strong>{photos.length}</strong>枚の思い出
+            </p>
+            {photos.length > 0 && (
+              <button className="album-intro__select" type="button" onClick={() => setSelecting(true)}>
+                選んで削除
+              </button>
+            )}
           </div>
         )}
 
@@ -205,10 +208,10 @@ export function GalleryPage() {
         {error && <div className="api-error" role="alert">{error}<button onClick={() => void reload()}>再読み込み</button></div>}
 
         {!loading && !error && messages.map((message) => (
-          <Card className="message-card" key={message.content_id}>
+          <article className="album-note" key={message.content_id}>
             <small>{formatDate(message.created_at)}</small>
             <p>{message.text}</p>
-          </Card>
+          </article>
         ))}
 
         {!loading && !error && photos.length === 0 && (
@@ -219,43 +222,44 @@ export function GalleryPage() {
           />
         )}
 
-        <div className="photo-grid">
-          {photos.map((photo) => {
+        {/* 写真はポラロイドにして、少しずつ傾けて貼る */}
+        <ul className={'album-grid' + (selecting ? ' is-selecting' : '')}>
+          {photos.map((photo, index) => {
             const isSelected = selected.includes(photo.content_id)
             const content = (
               <>
-                <div className="photo-grid__image photo-grid__image--real">
+                <span className="album-photo__image">
                   <img src={photo.url ?? ''} alt="" onError={() => void reload()} />
                   {selecting && (
                     <span className={'select-check ' + (isSelected ? 'is-selected' : '')}>
                       {isSelected && <Check size={15} />}
                     </span>
                   )}
-                </div>
-                <span className="photo-grid__date">{formatDate(photo.created_at)}</span>
+                </span>
+                <span className="album-photo__date">{formatDate(photo.created_at)}</span>
               </>
             )
 
-            return selecting ? (
-              <button
-                className="photo-grid__item"
-                type="button"
-                key={photo.content_id}
-                onClick={() => togglePhoto(photo.content_id)}
-              >
-                {content}
-              </button>
-            ) : (
-              <Link
-                className="photo-grid__item"
-                key={photo.content_id}
-                to={folderPath(folderId, '/photos/' + photo.content_id)}
-              >
-                {content}
-              </Link>
+            return (
+              <li key={photo.content_id} style={{ '--i': index } as CSSProperties}>
+                {selecting ? (
+                  <button
+                    className={'album-photo' + (isSelected ? ' is-selected' : '')}
+                    type="button"
+                    aria-pressed={isSelected}
+                    onClick={() => togglePhoto(photo.content_id)}
+                  >
+                    {content}
+                  </button>
+                ) : (
+                  <Link className="album-photo" to={folderPath(folderId, '/photos/' + photo.content_id)}>
+                    {content}
+                  </Link>
+                )}
+              </li>
             )
           })}
-        </div>
+        </ul>
 
         {selecting ? (
           <div className="selection-bar">
@@ -310,43 +314,39 @@ export function PhotoDetailPage() {
   }
 
   return (
-    <AppShell fullBleed>
-      <div className="photo-detail">
-        <div className="photo-detail__top">
-          <button type="button" onClick={() => navigate(folderPath(folderId, '/photos'))}>
-            <X size={24} />
+    <AppShell>
+      <div className="photo-view">
+        <div className="photo-view__top">
+          <button type="button" aria-label="一覧に戻る" onClick={() => navigate(folderPath(folderId, '/photos'))}>
+            <X size={22} />
           </button>
           <span>{photoIndex + 1} / {photos.length}</span>
-          <button type="button" aria-label="削除" onClick={() => void remove()}><Trash2 size={22} /></button>
+          <a href={photo.url ?? ''} download aria-label="保存"><Download size={20} /></a>
         </div>
 
-        <div className="photo-detail__image photo-detail__image--real">
+        {/* 1枚を大きなポラロイドにして、机の上に置いたように見せる */}
+        <figure className="photo-view__polaroid" key={photo.content_id}>
           <img src={photo.url ?? ''} alt="保存された思い出" onError={() => void reload()} />
-          {previous && (
-            <Link
-              className="photo-detail__arrow photo-detail__arrow--left"
-              to={folderPath(folderId, '/photos/' + previous.content_id)}
-            >
-              <ChevronLeft size={25} />
-            </Link>
-          )}
-          {next && (
-            <Link
-              className="photo-detail__arrow photo-detail__arrow--right"
-              to={folderPath(folderId, '/photos/' + next.content_id)}
-            >
-              <ChevronRight size={25} />
-            </Link>
-          )}
-        </div>
+          <figcaption>
+            <span>思い出の写真</span>
+            <time dateTime={photo.created_at}>{formatDate(photo.created_at)}</time>
+          </figcaption>
+        </figure>
 
-        <div className="photo-detail__caption">
-          <div>
-            <strong>思い出の写真</strong>
-            <span>{formatDate(photo.created_at)}</span>
-          </div>
-          <a href={photo.url ?? ''} download aria-label="保存"><Download size={21} /></a>
-          <button type="button" aria-label="削除" onClick={() => void remove()}><Trash2 size={21} /></button>
+        <div className="photo-view__nav">
+          {previous && photos.length > 1 ? (
+            <Link aria-label="前の写真" to={folderPath(folderId, '/photos/' + previous.content_id)}>
+              <ChevronLeft size={22} />
+            </Link>
+          ) : <span />}
+          <button className="photo-view__delete" type="button" onClick={() => void remove()}>
+            <Trash2 size={17} />この写真を削除
+          </button>
+          {next && photos.length > 1 ? (
+            <Link aria-label="次の写真" to={folderPath(folderId, '/photos/' + next.content_id)}>
+              <ChevronRight size={22} />
+            </Link>
+          ) : <span />}
         </div>
       </div>
     </AppShell>
@@ -372,6 +372,9 @@ export function UploadPage() {
       .then((contents) => setCurrentCount(contents.contents.filter((item) => item.type === 'photo').length))
       .catch((reason: unknown) => setError(errorMessage(reason)))
   }, [folderId, navigate])
+
+  const previews = useMemo(() => files.map((file) => URL.createObjectURL(file)), [files])
+  useEffect(() => () => previews.forEach((url) => URL.revokeObjectURL(url)), [previews])
 
   const available = Math.max(0, 20 - currentCount)
   const selectFiles = (selected: FileList | null) => {
@@ -402,13 +405,12 @@ export function UploadPage() {
       <div className="screen screen--upload">
         <PageHeader title="写真を追加" backTo={folderPath(folderId, '/photos')} />
 
-        <div className="upload-copy">
-          <span className="upload-copy__icon"><CloudUpload size={29} /></span>
-          <h1>思い出を追加しよう</h1>
-          <p>一度に10枚、フォルダ全体で20枚まで追加できます。</p>
+        <div className="paper-upload__copy">
+          <h1>思い出を、アルバムに貼ろう</h1>
+          <p>一度に10枚、フォルダ全体で20枚まで追加できます。いまは {currentCount} / 20枚。</p>
         </div>
 
-        <label className="upload-dropzone">
+        <label className={'paper-upload__drop' + (available === 0 ? ' is-full' : '')}>
           <input
             type="file"
             multiple
@@ -416,30 +418,28 @@ export function UploadPage() {
             accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
             onChange={(event) => selectFiles(event.target.files)}
           />
-          <span><Upload size={26} /></span>
-          <strong>{available ? '写真を選ぶ' : '20枚まで追加済みです'}</strong>
-          <small>JPEG・PNG・WebP・HEIC / 1枚15MBまで</small>
+          <span className="paper-upload__stack" aria-hidden="true">
+            <i /><i /><i><ImagePlus size={24} /></i>
+          </span>
+          <strong>{available ? (files.length ? '選び直す' : '写真を選ぶ') : '20枚まで追加済みです'}</strong>
+          <small>JPEG・PNG・WebP・HEIC / 1枚15MBまで。向きとサイズは自動で整えます</small>
         </label>
 
         {files.length > 0 && (
-          <Card className="upload-queue">
-            <div className="upload-queue__heading">
-              <strong>{files.length}枚を選択中</strong>
-              <Badge tone="accent">追加後 {currentCount + files.length} / 20枚</Badge>
-            </div>
-            <div className="upload-file-list">
-              {files.map((file) => <span key={file.name + file.lastModified}>{file.name}</span>)}
-            </div>
-          </Card>
+          <section className="paper-upload__queue" aria-label="追加する写真">
+            <p>
+              <strong>{files.length}枚</strong>を貼ります
+              <span>追加後 {currentCount + files.length} / 20枚</span>
+            </p>
+            <ul>
+              {files.map((file, index) => (
+                <li key={file.name + file.lastModified} style={{ '--i': index } as CSSProperties}>
+                  <img src={previews[index]} alt={file.name} />
+                </li>
+              ))}
+            </ul>
+          </section>
         )}
-
-        <Card className="guide-card">
-          <Info size={20} />
-          <div>
-            <strong>アップロード時に自動調整</strong>
-            <p>向きとサイズを整え、JPEGに変換して保存します。</p>
-          </div>
-        </Card>
 
         {error && <div className="api-error" role="alert">{error}</div>}
 

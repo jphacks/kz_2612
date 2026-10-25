@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import {
   ArrowRight,
   Camera,
@@ -6,7 +6,8 @@ import {
   FolderHeart,
   ImagePlus,
   LoaderCircle,
-  MoreHorizontal,
+  LockKeyhole,
+  LockKeyholeOpen,
   Plus,
   RefreshCw,
   Sparkles,
@@ -15,7 +16,7 @@ import {
 } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import { createCapsule, listCapsules, uploadImage } from '../api/client'
-import type { CapsuleSummary } from '../api/types'
+import type { CapsuleListItem } from '../api/types'
 import { AppShell, PageHeader } from '../components/AppShell'
 import { Badge, Button, Card, EmptyState } from '../components/Ui'
 import { normalizeImage } from '../lib/images'
@@ -25,10 +26,9 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : '処理に失敗しました。もう一度お試しください。'
 }
 
-const coverTones = ['sunset', 'ocean', 'forest', 'violet', 'peach', 'sky']
 
 export function FolderListPage() {
-  const [folders, setFolders] = useState<CapsuleSummary[]>([])
+  const [folders, setFolders] = useState<CapsuleListItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [reloadKey, setReloadKey] = useState(0)
@@ -52,30 +52,23 @@ export function FolderListPage() {
 
   return (
     <AppShell showNavigation>
-      <div className="screen screen--folders">
-        <header className="home-header">
-          <div>
-            <span className="home-header__greeting">おかえりなさい</span>
-            <h1>思い出フォルダ</h1>
-          </div>
-          <button className="avatar-button" type="button" aria-label="アカウント">
-            YO
-          </button>
+      <div className="screen screen--folders lux-home">
+        <header className="lux-home__header">
+          <h1>思い出フォルダ</h1>
+          <p className="lux-count">
+            <strong>{folders.length}</strong>個
+          </p>
         </header>
+        <p className="lux-home__lead">写真のポーズをみんなで再現すると、フォルダが開きます。</p>
 
-        <Link className="create-banner" to="/folders/new">
-          <span className="create-banner__icon"><Plus size={22} /></span>
+        <Link className="lux-create" to="/folders/new">
+          <span className="lux-create__plus"><Plus size={18} /></span>
           <span>
             <strong>新しいフォルダをつくる</strong>
-            <small>鍵になる1枚を選んではじめよう</small>
+            <small>鍵になる写真を1枚選んではじめよう</small>
           </span>
-          <ArrowRight size={20} />
+          <ArrowRight size={18} />
         </Link>
-
-        <div className="section-heading">
-          <h2>参加中</h2>
-          <span>{folders.length} folders</span>
-        </div>
 
         {loading && (
           <div className="api-state" role="status">
@@ -102,7 +95,7 @@ export function FolderListPage() {
           />
         )}
 
-        <div className="folder-list">
+        <ul className="lux-folders">
           {folders.map((folder, index) => {
             const isUnlocked = Boolean(getUnlockSession(folder.capsule_id))
             const destination = isUnlocked
@@ -110,36 +103,39 @@ export function FolderListPage() {
               : '/folders/' + folder.capsule_id + '/unlock'
 
             return (
-              <Link className="folder-card" to={destination} key={folder.capsule_id}>
-                <div className={'folder-card__cover photo-tone--' + coverTones[index % coverTones.length]}>
-                  <span className="folder-card__shine" />
-                  <FolderHeart size={27} />
-                  <Badge tone={isUnlocked ? 'success' : 'neutral'}>
-                    {isUnlocked ? '開封中' : '認証が必要'}
-                  </Badge>
-                </div>
-                <div className="folder-card__body">
-                  <div className="folder-card__title-row">
-                    <h3>{folder.name}</h3>
-                    <MoreHorizontal size={19} />
-                  </div>
-                  <div className="folder-card__meta">
-                    <span><Users size={15} />鍵写真は{folder.people_count}人</span>
-                    <span>{folder.role === 'owner' ? '作成者' : '参加中'}</span>
-                  </div>
-                </div>
-              </Link>
+              <li key={folder.capsule_id} style={{ '--i': index } as CSSProperties}>
+                <Link className={'lux-folder' + (isUnlocked ? ' is-open' : '')} to={destination}>
+                  <span className="lux-folder__photo">
+                    {/* 写真が読めないときは、下のアイコンが見える */}
+                    <FolderHeart size={26} aria-hidden="true" />
+                    {folder.key_photo_url && (
+                      <img
+                        src={folder.key_photo_url}
+                        alt=""
+                        onError={(event) => { event.currentTarget.style.display = 'none' }}
+                      />
+                    )}
+                    <span className="lux-folder__state">
+                      {isUnlocked ? <LockKeyholeOpen size={13} /> : <LockKeyhole size={13} />}
+                      {isUnlocked ? '開いています' : '鍵がかかっています'}
+                    </span>
+                  </span>
+                  <span className="lux-folder__body">
+                    <strong>{folder.name}</strong>
+                    <small>
+                      <Users size={13} aria-hidden="true" />
+                      {folder.people_count}人のポーズで開く
+                      <span aria-hidden="true">・</span>
+                      {folder.role === 'owner' ? '作成者' : '参加中'}
+                    </small>
+                  </span>
+                  <ArrowRight className="lux-folder__arrow" size={18} aria-hidden="true" />
+                </Link>
+              </li>
             )
           })}
-        </div>
+        </ul>
 
-        <Card className="tip-card">
-          <span className="tip-card__icon"><Sparkles size={19} /></span>
-          <div>
-            <strong>ポーズのコツ</strong>
-            <p>肩と手足が見えるように、少しカメラから離れて撮ろう。</p>
-          </div>
-        </Card>
       </div>
     </AppShell>
   )

@@ -39,6 +39,17 @@ describe('App routes', () => {
     sessionStorage.clear()
   })
 
+  it('shows the top page with a link to create a capsule', () => {
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <App />
+      </MemoryRouter>,
+    )
+
+    expect(screen.getByRole('heading', { level: 1, name: 'See You There.' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'カプセルをつくる' })).toHaveAttribute('href', '/folders/new')
+  })
+
   it('shows the login screen', () => {
     render(
       <MemoryRouter initialEntries={['/login']}>

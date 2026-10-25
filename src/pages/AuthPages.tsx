@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Camera,
   Check,
@@ -16,6 +16,8 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { getCapsule, openCapsule, uploadImage } from '../api/client'
 import type { CapsuleDetail } from '../api/types'
 import { AppShell, PageHeader } from '../components/AppShell'
+import { GiftReveal } from '../components/Celebration'
+import { PhotoWithPose } from '../components/Constellation'
 import { Badge, Button, Card } from '../components/Ui'
 import { captureVideoFrame } from '../lib/images'
 import {
@@ -47,43 +49,38 @@ export function UnlockPage() {
   const activeSession = folderId ? getUnlockSession(folderId) : null
   const peopleCount = folder?.people_count ?? 0
 
+  // 鍵の写真の骨格の点。点がない古いフォルダは線を重ねない
+  const poses = folder ? folder.guide.map((person) => person.points) : []
+
   return (
     <AppShell>
-      <div className="screen screen--unlock">
+      <div className="screen screen--unlock lux-unlock">
         <PageHeader title={folder?.name ?? '写真認証'} backTo="/folders" />
-        <div className="unlock-hero">
-          {folder?.preview_url ? (
-            <img className="unlock-hero__photo" src={folder.preview_url} alt="鍵写真のポーズガイド" />
+        <div className="lux-unlock__photo">
+          {folder?.key_photo_url ? (
+            <PhotoWithPose
+              src={folder.key_photo_url}
+              poses={poses}
+              alt={'鍵の写真（' + peopleCount + '人）'}
+            />
           ) : (
-            <>
-              <div className="unlock-hero__orbit unlock-hero__orbit--one" />
-              <div className="unlock-hero__orbit unlock-hero__orbit--two" />
-              <span className="unlock-hero__lock"><LockKeyhole size={32} /></span>
-            </>
+            <div className="lux-unlock__placeholder" aria-hidden="true" />
           )}
-          <div className="unlock-hero__people" aria-hidden="true">
-            {Array.from({ length: peopleCount || 2 }).map((_, index) => <span key={index} />)}
-          </div>
+          <span className="lux-unlock__tag"><LockKeyhole size={13} />鍵の写真</span>
         </div>
 
-        <div className="unlock-copy">
-          <p className="eyebrow">
-            {peopleCount ? peopleCount + ' PEOPLE · POSE TO OPEN' : 'POSE TO OPEN'}
-          </p>
-          <h1>みんなでポーズを<br />再現して開こう</h1>
-          <p>
-            鍵写真と同じ人数・立ち位置・ポーズをカメラの前で再現します。
-            同じ人である必要はありません。
-          </p>
+        <div className="lux-unlock__copy">
+          <h1>この写真のポーズを、<br />{peopleCount ? peopleCount + '人で' : 'みんなで'}再現しよう</h1>
+          <p>人数・立ち位置・ポーズがそろうと、フォルダが開きます。</p>
         </div>
 
         {error && <div className="api-error" role="alert">{error}</div>}
 
-        <Card className="how-to-card">
-          <span><i>1</i>{peopleCount || '同じ人数'}人でカメラの前に並ぶ</span>
-          <ChevronRight size={16} />
-          <span><i>2</i>鍵写真のポーズに合わせる</span>
-        </Card>
+        <ol className="lux-steps">
+          <li><span>01</span>{peopleCount ? peopleCount + '人' : '同じ人数'}でカメラの前に並ぶ</li>
+          <li><span>02</span>写真と同じ立ち位置・ポーズをとる</li>
+          <li><span>03</span>撮影して、そろっていれば開く</li>
+        </ol>
 
         <div className="unlock-actions">
           {activeSession ? (
@@ -341,6 +338,18 @@ export function ResultPage() {
     )
   }
 
+  if (success && result.opened) {
+    return (
+      <SuccessResult
+        folderId={folderId}
+        score={result.result.score}
+        message={result.result.message}
+        thenPhotoUrl={result.opened.key_photo_url}
+        nowPhotoUrl={result.opened.attempt_photo_url}
+      />
+    )
+  }
+
   return (
     <AppShell>
       <div className="screen screen--result">
@@ -389,6 +398,57 @@ export function ResultPage() {
             <ChevronRight size={18} />
           </Button>
           {!success && <small>試行回数に制限はありません</small>}
+        </div>
+      </div>
+    </AppShell>
+  )
+}
+
+/** 認証成功: 贈りものが開く演出のあとに、結果と「思い出を見る」ボタンを出す */
+function SuccessResult({
+  folderId,
+  score,
+  message,
+  thenPhotoUrl,
+  nowPhotoUrl,
+}: {
+  folderId: string | undefined
+  score: number
+  message: string
+  thenPhotoUrl: string
+  nowPhotoUrl: string
+}) {
+  const navigate = useNavigate()
+  const [revealed, setRevealed] = useState(false)
+  const handleDone = useCallback(() => setRevealed(true), [])
+
+  return (
+    <AppShell>
+      <div className="screen screen--result">
+        <GiftReveal thenPhotoUrl={thenPhotoUrl} nowPhotoUrl={nowPhotoUrl} onDone={handleDone} />
+
+        <div className={'nt-after' + (revealed ? ' is-visible' : '')} aria-hidden={!revealed}>
+          <div className="result-heading">
+            <Badge tone="success">MATCH!</Badge>
+            <h1>あの日が、ひらきました</h1>
+            <p>{message}</p>
+            <strong className="result-score">一致度 {score}%</strong>
+          </div>
+
+          <Card className="session-card">
+            <LockKeyhole size={19} />
+            <div>
+              <strong>このタブでは開封状態をキープ</strong>
+              <p>画面を更新しても、最大12時間はそのまま見られます。</p>
+            </div>
+          </Card>
+
+          <div className="result-actions">
+            <Button fullWidth disabled={!revealed} onClick={() => navigate(folderPath(folderId, '/photos'))}>
+              思い出を見る
+              <ChevronRight size={18} />
+            </Button>
+          </div>
         </div>
       </div>
     </AppShell>
