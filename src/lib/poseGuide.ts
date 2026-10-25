@@ -15,11 +15,12 @@ export function getPoseGuideFeedback(
   }
 
   if (status === 'loading') {
-    return { text: '骨格ガイドを準備中…', tone: 'neutral' }
+    return { text: '白い線に合わせて並ぼう（人数の確認を準備中…）', tone: 'neutral' }
   }
 
   if (status === 'error') {
-    return { text: '骨格ガイドを利用できません。撮影は可能です', tone: 'warning' }
+    // 今の人の骨格は出せないが、お手本（白い線）は出ているので、そのまま撮影できる
+    return { text: '白い線に合わせて撮影しよう（人数の確認は使えません）', tone: 'neutral' }
   }
 
   if (detectedCount === 0) {
@@ -43,7 +44,7 @@ export function getPoseGuideFeedback(
   }
 
   return {
-    text: '人数OK！鍵写真のポーズに合わせよう',
+    text: '人数OK！白い線にポーズを合わせよう',
     tone: 'success',
   }
 }

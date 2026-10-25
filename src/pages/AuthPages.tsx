@@ -19,6 +19,7 @@ import { AppShell, PageHeader } from '../components/AppShell'
 import { PhotoReveal } from '../components/Celebration'
 import { Twinkles } from '../components/Decor'
 import { PhotoWithPose } from '../components/Constellation'
+import { KeyPoseGuide } from '../components/KeyPoseGuide'
 import { PoseOverlay } from '../components/PoseOverlay'
 import { Badge, Button, Card } from '../components/Ui'
 import { usePoseGuide } from '../hooks/usePoseGuide'
@@ -293,7 +294,7 @@ export function CameraPage() {
                 : '鍵写真は' + (folder?.people_count ?? '—') + '人'}
             </span>
             <small>
-              {guideEnabled ? 'MoveNet撮影ガイド' : '撮影ガイドOFF'}
+              {guideEnabled ? '白い線に、ポーズを合わせよう' : '撮影ガイドOFF'}
             </small>
           </div>
           <button
@@ -320,6 +321,14 @@ export function CameraPage() {
             playsInline
             onLoadedMetadata={() => setCameraReady(true)}
           />
+          {/* お手本: 鍵の写真のポーズ（白い点線）。サーバーの骨格を使うので、画面を開いたらすぐ出る */}
+          <KeyPoseGuide
+            poses={folder ? folder.guide.map((person) => person.points) : []}
+            imageSrc={folder?.key_photo_url}
+            mirrored={facingMode === 'user'}
+            visible={guideEnabled}
+          />
+          {/* 今カメラに写っている人の骨格（色付き）。ブラウザの MoveNet が読み込めてから出る */}
           <PoseOverlay
             videoRef={videoRef}
             poses={poseGuide.poses}

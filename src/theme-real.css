@@ -1777,3 +1777,28 @@ html {
 .lux-login {
   overflow: clip;
 }
+
+/* =====================================================================
+ * 撮影画面のお手本: 鍵の写真のポーズを白い点線で重ねる
+ * ===================================================================== */
+.key-pose-guide {
+  position: absolute;
+  z-index: 1; /* 今の人の骨格（.pose-overlay, z-index 2）より下 */
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.key-pose-guide__line {
+  stroke: rgba(255, 255, 255, 0.85);
+  stroke-width: 5px;
+  stroke-dasharray: 2 10;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.55));
+}
+
+.key-pose-guide__dot {
+  fill: rgba(255, 255, 255, 0.9);
+  filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.55));
+}
