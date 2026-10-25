@@ -19,7 +19,9 @@ from typing import Literal
 from app.pose.angles import MIRROR_JOINT, MIRROR_POINT, PersonPose, mirrored, sort_left_to_right
 from app.pose.config import MatchConfig
 
-Reason = Literal["count_mismatch", "pose_mismatch", "body_not_visible", "no_person", "face_not_visible", "face_mismatch"]
+Reason = Literal[
+    "count_mismatch", "pose_mismatch", "body_not_visible", "no_person", "face_not_visible", "face_mismatch"
+]
 
 JOINT_LABELS = {
     "left_elbow": "左ひじ",
@@ -188,14 +190,20 @@ def _compare_person(
     angles_ok = not use_angles or (mean_deg <= config.tolerance_deg and max_deg <= config.max_joint_diff_deg)
 
     def result(ok: bool, badness: float | None, **kw) -> PersonResult:
-        return PersonResult(position=position, ok=ok, mean_diff_deg=mean_deg, max_diff_deg=max_deg,
-                            joints=joints, badness=badness, **kw)
+        return PersonResult(
+            position=position, ok=ok, mean_diff_deg=mean_deg, max_diff_deg=max_deg, joints=joints, badness=badness, **kw
+        )
 
     if not key.rel:
         # 点の位置を持たない古い鍵は、角度だけで比べる
         if not has_angles:
-            return result(False, None, missing_joints=[joint_name_map[k] for k, v in key.angles.items()
-                                                       if v is not None and attempt.angles.get(k) is None])
+            return result(
+                False,
+                None,
+                missing_joints=[
+                    joint_name_map[k] for k, v in key.angles.items() if v is not None and attempt.angles.get(k) is None
+                ],
+            )
         return result(angles_ok, mean_deg / config.tolerance_deg)
 
     key_points = {k: v for k, v in key.rel.items() if v is not None}
@@ -222,8 +230,13 @@ def _compare_person(
     badness_parts = [mean_point / config.point_tolerance]
     if use_angles:
         badness_parts.append(mean_deg / config.tolerance_deg)
-    return result(points_ok and angles_ok, sum(badness_parts) / len(badness_parts),
-                  missing_joints=missing, points=points, mean_point_diff=mean_point)
+    return result(
+        points_ok and angles_ok,
+        sum(badness_parts) / len(badness_parts),
+        missing_joints=missing,
+        points=points,
+        mean_point_diff=mean_point,
+    )
 
 
 def _compare_all(
@@ -267,7 +280,9 @@ def match_poses(key: list[PersonPose], attempt: list[PersonPose], config: MatchC
     expected, detected = len(key), len(attempt)
 
     if detected == 0:
-        return MatchResult(False, "no_person", 0, "カメラに誰も写っていないみたい。画面に入ってみて", expected, detected)
+        return MatchResult(
+            False, "no_person", 0, "カメラに誰も写っていないみたい。画面に入ってみて", expected, detected
+        )
 
     if expected != detected:
         if detected < expected:
@@ -285,8 +300,16 @@ def match_poses(key: list[PersonPose], attempt: list[PersonPose], config: MatchC
     overall = _overall(people)
     if overall == float("inf"):
         not_visible = next(r for r in people if r.badness is None)
-        return MatchResult(False, "body_not_visible", 0, _not_visible_message(not_visible, detected),
-                           expected, detected, is_mirrored, people)
+        return MatchResult(
+            False,
+            "body_not_visible",
+            0,
+            _not_visible_message(not_visible, detected),
+            expected,
+            detected,
+            is_mirrored,
+            people,
+        )
 
     # 合否は画面に出す一致度そのもので決める（表示と判定を食い違わせない）
     score = _score(overall)
@@ -297,7 +320,9 @@ def match_poses(key: list[PersonPose], attempt: list[PersonPose], config: MatchC
     worst_person = max(people, key=lambda r: r.badness or 0.0)
     candidates_hint = [(d.diff / config.point_tolerance, _point_hint(n, d)) for n, d in worst_person.points.items()]
     if config.judge_with_angles or not worst_person.points:
-        candidates_hint += [(d.diff_deg / config.tolerance_deg, _joint_hint(n, d)) for n, d in worst_person.joints.items()]
+        candidates_hint += [
+            (d.diff_deg / config.tolerance_deg, _joint_hint(n, d)) for n, d in worst_person.joints.items()
+        ]
     _, hint = max(candidates_hint, key=lambda c: c[0])
     msg = f"あと少し！{_position_label(worst_person.position, detected)}{hint}"
     return MatchResult(False, "pose_mismatch", score, msg, expected, detected, is_mirrored, people)

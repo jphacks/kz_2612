@@ -47,7 +47,7 @@ class FaceConfig:
     memory: int = 5
 
     @classmethod
-    def from_env(cls) -> "FaceConfig":
+    def from_env(cls) -> FaceConfig:
         d = cls()
         env = os.environ.get
         return cls(
@@ -91,8 +91,13 @@ class FaceEncoder:
         for f in found if found is not None else []:
             feat = self._rec.feature(self._rec.alignCrop(bgr, f)).flatten().astype(float)
             norm = float(np.linalg.norm(feat)) or 1.0
-            faces.append(Face(box=(float(f[0]), float(f[1]), float(f[2]), float(f[3])),
-                              embedding=(feat / norm).tolist(), score=float(f[14])))
+            faces.append(
+                Face(
+                    box=(float(f[0]), float(f[1]), float(f[2]), float(f[3])),
+                    embedding=(feat / norm).tolist(),
+                    score=float(f[14]),
+                )
+            )
         return faces
 
 
@@ -131,6 +136,7 @@ def assign_faces(people: list[PersonPose], faces: list[Face], width: int, height
 
 # ---- 顔の記憶 ----
 
+
 def new_memory(face: Face | None) -> list[dict]:
     """鍵の写真の顔から、その人の顔の記憶を作る。顔が見つからなければ空（次に開けたときの顔から覚える）。"""
     return [] if face is None else [{"embedding": face.embedding, "source": "key"}]
@@ -142,8 +148,7 @@ def update_memory(memory: list[dict], face: Face | None, limit: int) -> list[dic
         return memory
     key = [m for m in memory if m.get("source") == "key"]
     opened = [m for m in memory if m.get("source") != "key"]
-    opened.append({"embedding": face.embedding, "source": "open",
-                   "at": dt.datetime.now(dt.timezone.utc).isoformat()})
+    opened.append({"embedding": face.embedding, "source": "open", "at": dt.datetime.now(dt.UTC).isoformat()})
     return key + opened[-limit:]
 
 
@@ -166,8 +171,14 @@ class FacePersonResult:
 
     def to_dict(self) -> dict:
         r = lambda v: None if v is None else round(v, 3)  # noqa: E731
-        return {"position": self.position, "visible": self.visible, "checked": self.checked, "ok": self.ok,
-                "similarity": r(self.similarity), "others": r(self.others)}
+        return {
+            "position": self.position,
+            "visible": self.visible,
+            "checked": self.checked,
+            "ok": self.ok,
+            "similarity": r(self.similarity),
+            "others": r(self.others),
+        }
 
 
 @dataclass
@@ -206,8 +217,12 @@ def match_faces(memories: list[list[dict]], faces: list[Face | None], config: Fa
     hidden = [p for p in people if p.checked and not p.visible]
     if len(hidden) > config.max_hidden:
         label = _label(hidden[0].position, n)
-        return FaceResult(False, "face_not_visible",
-                          f"{label[:-1] if label else 'あなた'}の顔が見えないみたい。顔が写るようにしてみて", people)
+        return FaceResult(
+            False,
+            "face_not_visible",
+            f"{label[:-1] if label else 'あなた'}の顔が見えないみたい。顔が写るようにしてみて",
+            people,
+        )
     wrong = [p for p in people if p.checked and p.visible and not p.ok]
     if wrong:
         p = wrong[0]

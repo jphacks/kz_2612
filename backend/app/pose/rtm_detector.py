@@ -22,8 +22,23 @@ DEFAULT_POSE_PATH = MODELS / "rtm_pose_rtmpose_m.onnx"
 # COCO の17点 → MediaPipe の33点の番号（角度の計算は MediaPipe の番号で書いてあるのでそろえる）
 # 鼻・目・耳は、顔をどの人に結びつけるかに使う
 COCO_TO_MP = {
-    0: 0, 1: 2, 2: 5, 3: 7, 4: 8,
-    5: 11, 6: 12, 7: 13, 8: 14, 9: 15, 10: 16, 11: 23, 12: 24, 13: 25, 14: 26, 15: 27, 16: 28,
+    0: 0,
+    1: 2,
+    2: 5,
+    3: 7,
+    4: 8,
+    5: 11,
+    6: 12,
+    7: 13,
+    8: 14,
+    9: 15,
+    10: 16,
+    11: 23,
+    12: 24,
+    13: 25,
+    14: 26,
+    15: 27,
+    16: 28,
 }
 L_SHOULDER, R_SHOULDER = 5, 6
 
@@ -46,9 +61,12 @@ class RtmPoseDetector:
                 raise FileNotFoundError(f"姿勢推定モデルが見つかりません: {p}（backend/README.md 参照）")
         # balanced モードと同じモデル・入力サイズ（YOLOX-m ＋ RTMPose-m）
         self._body = Body(
-            det=str(det_path), det_input_size=(640, 640),
-            pose=str(pose_path), pose_input_size=(192, 256),
-            backend="onnxruntime", device="cpu",
+            det=str(det_path),
+            det_input_size=(640, 640),
+            pose=str(pose_path),
+            pose_input_size=(192, 256),
+            backend="onnxruntime",
+            device="cpu",
         )
         # RTMPose の点ごとの確からしさ（0〜1くらい）がこれ以上なら「写っている」とみなす。
         # 0.3 だと、画面外のひざ・足首を下端に寄せて推測した点（0.3〜0.47）まで拾ってしまう
@@ -63,7 +81,7 @@ class RtmPoseDetector:
     def close(self) -> None:
         pass
 
-    def __enter__(self) -> "RtmPoseDetector":
+    def __enter__(self) -> RtmPoseDetector:
         return self
 
     def __exit__(self, *exc) -> None:

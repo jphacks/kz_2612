@@ -52,7 +52,7 @@ class PoseDetector:
     def close(self) -> None:
         self._landmarker.close()
 
-    def __enter__(self) -> "PoseDetector":
+    def __enter__(self) -> PoseDetector:
         return self
 
     def __exit__(self, *exc) -> None:

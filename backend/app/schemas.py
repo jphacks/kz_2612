@@ -51,7 +51,9 @@ class GuidePerson(BaseModel):
     position: int = Field(description="左から何番目か（0始まり）")
     angles: dict[str, float | None]
     points: dict[str, list[float] | None] = Field(description="体の12点の正規化座標 [x, y]（0〜1）")
-    face_registered: bool = Field(default=False, description="顔の記憶があるか（鍵の写真で顔が見えなかった人は、最初に開けたときに覚える）")
+    face_registered: bool = Field(
+        default=False, description="顔の記憶があるか（鍵の写真で顔が見えなかった人は、最初に開けたときに覚える）"
+    )
 
 
 class CapsuleSummary(BaseModel):
@@ -121,8 +123,12 @@ class PersonResultOut(BaseModel):
     mean_diff_deg: float | None
     max_diff_deg: float | None
     joints: dict[str, JointDiffOut]
-    missing_joints: list[str] = Field(default_factory=list, description="当時は写っていたのに今は写っていない点。両肩が見えないときは shoulders")
-    points: dict[str, PointDiffOut] = Field(default_factory=dict, description="点の位置のずれ（両肩の中心が原点、肩幅が1）")
+    missing_joints: list[str] = Field(
+        default_factory=list, description="当時は写っていたのに今は写っていない点。両肩が見えないときは shoulders"
+    )
+    points: dict[str, PointDiffOut] = Field(
+        default_factory=dict, description="点の位置のずれ（両肩の中心が原点、肩幅が1）"
+    )
     mean_point_diff: float | None = None
 
 
@@ -137,9 +143,13 @@ class FacePersonOut(BaseModel):
 
 class MatchResultOut(BaseModel):
     ok: bool
-    reason: Literal["count_mismatch", "pose_mismatch", "body_not_visible", "no_person",
-                    "face_not_visible", "face_mismatch"] | None
-    score: int = Field(description="一致度ゲージ用 0〜100。許容値ちょうどで70。ポーズはこれが EMO_PASS_SCORE（既定55）以上で一致")
+    reason: (
+        Literal["count_mismatch", "pose_mismatch", "body_not_visible", "no_person", "face_not_visible", "face_mismatch"]
+        | None
+    )
+    score: int = Field(
+        description="一致度ゲージ用 0〜100。許容値ちょうどで70。ポーズはこれが EMO_PASS_SCORE（既定55）以上で一致"
+    )
     message: str = Field(description="そのまま画面に出せる声かけ")
     expected_people: int
     detected_people: int
@@ -181,6 +191,7 @@ class InviteCreated(BaseModel):
 
 class InvitePreview(BaseModel):
     """招待リンクを開いた人に見せる情報。参加前なので写真や中身は含めない。"""
+
     capsule_id: str
     capsule_name: str
     open_date: dt.date | None

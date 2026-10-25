@@ -9,7 +9,6 @@ from pathlib import Path
 from fastapi import Depends, Header, Request
 
 from app.errors import ApiError
-
 from app.pose.base import Detector
 from app.pose.config import MatchConfig
 from app.pose.face import FaceConfig, FaceEncoder

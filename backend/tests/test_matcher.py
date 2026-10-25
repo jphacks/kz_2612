@@ -1,12 +1,11 @@
 """照合ロジックの単体テスト（MediaPipe を使わない）。"""
 
+import numpy as np
 import pytest
 
 from app.pose.angles import Landmark, PersonPose, joint_angle, person_pose_from_landmarks
 from app.pose.config import MatchConfig
 from app.pose.matcher import match_poses
-
-import numpy as np
 
 BASE = {
     "left_elbow": 90.0,
@@ -118,12 +117,17 @@ def test_order_matters():
 
 def test_mirror_only_when_enabled():
     key = [person(0.5)]
-    flipped = [person(
-        0.5,
-        left_elbow=BASE["right_elbow"], right_elbow=BASE["left_elbow"],
-        left_shoulder=BASE["right_shoulder"], right_shoulder=BASE["left_shoulder"],
-        left_knee=BASE["right_knee"], right_knee=BASE["left_knee"],
-    )]
+    flipped = [
+        person(
+            0.5,
+            left_elbow=BASE["right_elbow"],
+            right_elbow=BASE["left_elbow"],
+            left_shoulder=BASE["right_shoulder"],
+            right_shoulder=BASE["left_shoulder"],
+            left_knee=BASE["right_knee"],
+            right_knee=BASE["left_knee"],
+        )
+    ]
     assert not match_poses(key, flipped, MatchConfig(allow_mirror=False)).ok
     result = match_poses(key, flipped, MatchConfig(allow_mirror=True))
     assert result.ok and result.mirrored
@@ -139,10 +143,14 @@ def test_body_not_visible_with_old_angle_only_key():
 # ---- 点の位置で比べる（既定） ----
 
 REL = {
-    "left_elbow": [0.8, 0.6], "right_elbow": [-0.8, 0.6],
-    "left_wrist": [0.9, -0.2], "right_wrist": [-0.9, -0.2],
-    "left_knee": [0.3, 2.5], "right_knee": [-0.3, 2.5],
-    "left_ankle": [0.3, 3.5], "right_ankle": [-0.3, 3.5],
+    "left_elbow": [0.8, 0.6],
+    "right_elbow": [-0.8, 0.6],
+    "left_wrist": [0.9, -0.2],
+    "right_wrist": [-0.9, -0.2],
+    "left_knee": [0.3, 2.5],
+    "right_knee": [-0.3, 2.5],
+    "left_ankle": [0.3, 3.5],
+    "right_ankle": [-0.3, 3.5],
 }
 UPPER_ONLY = {"left_knee": None, "right_knee": None, "left_ankle": None, "right_ankle": None}
 
@@ -208,8 +216,9 @@ def test_shoulders_not_visible():
 
 def test_angles_do_not_decide_by_default():
     # ひじの角度が大きく違っても、手やひじの位置がそろっていれば開く（自由なポーズのため）
-    bent = dict(left_elbow=170.0, right_elbow=10.0, left_shoulder=170.0, right_shoulder=0.0,
-                left_knee=60.0, right_knee=40.0)
+    bent = dict(
+        left_elbow=170.0, right_elbow=10.0, left_shoulder=170.0, right_shoulder=0.0, left_knee=60.0, right_knee=40.0
+    )
     assert match_poses([rperson(0.5)], [rperson(0.5, angles=bent)]).ok
     assert not match_poses([rperson(0.5)], [rperson(0.5, angles=bent)], MatchConfig(judge_with_angles=True)).ok
 
@@ -227,7 +236,7 @@ def test_rel_points_roundtrip_and_mirror():
 def test_rel_points_from_landmarks():
     lms = [Landmark(0.5, 0.5, 0.0) for _ in range(33)]
     lms[11], lms[12] = Landmark(0.6, 0.4), Landmark(0.4, 0.4)  # 肩（肩幅 0.2 × 幅100px = 20px）
-    lms[13] = Landmark(0.7, 0.6)                                 # 左ひじだけ見える
+    lms[13] = Landmark(0.7, 0.6)  # 左ひじだけ見える
     pose = person_pose_from_landmarks(lms, 100, 100)
     assert pose.rel["left_elbow"] == pytest.approx([1.0, 1.0])
     assert pose.rel["right_elbow"] is None
@@ -250,8 +259,8 @@ def test_shoulder_angle_without_hips():
     from app.pose.angles import shoulder_angle
 
     s, other = np.array([0.0, 0.0]), np.array([-10.0, 0.0])  # 右に向かって左肩→右肩
-    assert shoulder_angle(np.array([0.0, 10.0]), s, other) == pytest.approx(0.0)    # 腕を下ろす
-    assert shoulder_angle(np.array([10.0, 0.0]), s, other) == pytest.approx(90.0)   # 水平
+    assert shoulder_angle(np.array([0.0, 10.0]), s, other) == pytest.approx(0.0)  # 腕を下ろす
+    assert shoulder_angle(np.array([10.0, 0.0]), s, other) == pytest.approx(90.0)  # 水平
     assert shoulder_angle(np.array([0.0, -10.0]), s, other) == pytest.approx(180.0)  # 真上
     # 腰（23, 24）が見えていなくても肩の角度が出る
     lms = [Landmark(0.5, 0.5) for _ in range(33)]

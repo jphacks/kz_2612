@@ -31,7 +31,7 @@ def emb(*values) -> list[float]:
 
 A = emb(1, 0, 0)
 B = emb(0, 1, 0)
-A_OLDER = emb(1, 0.6, 0.4)   # 年月で少し変わった A（A との類似度 0.81 くらい）
+A_OLDER = emb(1, 0.6, 0.4)  # 年月で少し変わった A（A との類似度 0.81 くらい）
 STRANGER = emb(0, 0, 1)
 
 
@@ -91,7 +91,7 @@ def test_position_without_memory_is_not_checked():
 def test_memory_follows_aging():
     # 鍵の写真の顔だけだと通らないほど変わっても、開けるたびに覚えた最近の顔で通る
     very_old = emb(1, 0, 0)
-    now = emb(0.3, 1, 0)           # 鍵の写真の顔との類似度 0.29（しきい値未満）
+    now = emb(0.3, 1, 0)  # 鍵の写真の顔との類似度 0.29（しきい値未満）
     last_time = emb(0.35, 0.95, 0)  # 前回開けたときの顔
     memory = update_memory(new_memory(face(very_old)), face(last_time), CFG.memory)
     assert not match_faces([new_memory(face(very_old))], [face(now)], CFG).ok

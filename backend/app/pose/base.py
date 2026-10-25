@@ -44,8 +44,14 @@ def validate_key(people: list[PersonPose], min_points_per_person: int) -> list[P
     # 片手が隠れているなど、自由なポーズはそのまま鍵にできる
     unreadable = [i for i, p in enumerate(people) if p.visible_points() < min_points_per_person]
     if unreadable:
-        who = "" if len(people) == 1 else (
-            f"{'左' if unreadable[0] == 0 else '右'}の人の" if len(people) == 2 else f"左から{unreadable[0] + 1}番目の人の"
+        who = (
+            ""
+            if len(people) == 1
+            else (
+                f"{'左' if unreadable[0] == 0 else '右'}の人の"
+                if len(people) == 2
+                else f"左から{unreadable[0] + 1}番目の人の"
+            )
         )
         raise PoseExtractionError(
             "pose_not_visible",
@@ -56,9 +62,7 @@ def validate_key(people: list[PersonPose], min_points_per_person: int) -> list[P
 
 
 _COLORS = [(255, 99, 132), (54, 162, 235), (255, 206, 86), (75, 192, 192), (153, 102, 255)]
-_BONES = [(11, 12), (11, 23), (12, 24), (23, 24)] + [
-    pair for a, v, b in JOINTS.values() for pair in ((a, v), (v, b))
-]
+_BONES = [(11, 12), (11, 23), (12, 24), (23, 24)] + [pair for a, v, b in JOINTS.values() for pair in ((a, v), (v, b))]
 
 
 def draw_overlay(image: Image.Image, people: list[PersonPose], min_visibility: float = 0.5) -> Image.Image:
