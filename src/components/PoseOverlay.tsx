@@ -19,7 +19,8 @@ const CONNECTIONS = [
   [24, 26],
   [26, 28],
 ] as const
-const PERSON_COLORS = ['#a5f4d2', '#ffd68a', '#b9c7ff', '#ffb6cf']
+// 人ごとの色（紙とセピアの画面に合う暖かい色で、見分けがつくように）
+const PERSON_COLORS = ['#fbf0d6', '#f2c27b', '#e8a598', '#b9d3a8']
 type PoseOverlayProps = {
   videoRef: RefObject<HTMLVideoElement | null>
   poses: StabilizedPose[]

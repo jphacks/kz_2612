@@ -154,6 +154,8 @@ def _summary(
         status=capsule["status"],
         people_count=len(capsule["key_pose"]["people"]),
         role=role,
+        # 写真は見せずに、ポーズの形（点の位置）だけを一覧に出す
+        poses=[p.get("points", {}) for p in capsule["key_pose"]["people"]],
         cover_photo_url=(
             storage.presign_get(capsule["cover_photo_key"], settings.view_url_expires)
             if storage and settings and capsule.get("cover_photo_key")

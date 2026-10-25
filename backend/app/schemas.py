@@ -62,6 +62,10 @@ class CapsuleSummary(BaseModel):
     status: Literal["locked", "opened"] = Field(description="opened は一度でも開けたことがある")
     people_count: int
     role: Literal["owner", "member"]
+    poses: list[dict[str, list[float] | None]] = Field(
+        default_factory=list,
+        description="鍵の写真の各人の体の点（左から順、詳細の guide[].points と同じ）。一覧でポーズの形だけを見せる用",
+    )
     cover_photo_url: str | None = Field(default=None, description="任意の表紙画像。未設定なら null")
 
 
