@@ -197,7 +197,6 @@ flowchart TB
 
 ### AWS
 
-- Amazon Cognito
 - Amazon API Gateway
 - AWS Lambda（コンテナイメージ）
 - Amazon ECR
