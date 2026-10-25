@@ -8,3 +8,6 @@ dist
 .DS_Store
 Thumbs.db
 coverage
+
+# Claude Code のサブエージェント用の作業ツリー
+.claude/worktrees/
