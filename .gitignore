@@ -11,3 +11,6 @@ coverage
 
 # Claude Code のサブエージェント用の作業ツリー
 .claude/worktrees/
+
+# git bundle（ブランチの手渡し用の一時ファイル）
+*.bundle
