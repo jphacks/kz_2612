@@ -14,3 +14,8 @@ coverage
 
 # git bundle（ブランチの手渡し用の一時ファイル）
 *.bundle
+
+# Playwright のスクショと実行結果（コミットしない。CI では artifact になる）
+e2e-screenshots/
+playwright-report/
+test-results/
