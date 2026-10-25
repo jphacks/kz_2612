@@ -9,6 +9,8 @@ export interface CapsuleSummary {
   people_count: number
   role: CapsuleRole
   cover_photo_url: string | null
+  /** 鍵の写真の各人の体の点（左から順）。写真は見せずにポーズの形だけを出す用。古いバックエンドだと無い */
+  poses?: Array<Record<string, [number, number] | null>>
 }
 
 export interface CreateCapsuleInput {

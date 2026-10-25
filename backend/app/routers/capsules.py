@@ -159,6 +159,8 @@ def _summary(
             if storage and settings and capsule.get("cover_photo_key")
             else None
         ),
+        # 写真は見せずに、ポーズの形（点の位置）だけを一覧に出す
+        poses=[p.get("points", {}) for p in capsule["key_pose"]["people"]],
     )
 
 
