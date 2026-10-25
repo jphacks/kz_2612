@@ -14,12 +14,15 @@ import {
 } from 'lucide-react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { getCapsule, openCapsule, uploadImage } from '../api/client'
-import type { CapsuleDetail } from '../api/types'
+import type { CapsuleDetail, FacePersonResult } from '../api/types'
 import { AppShell, PageHeader } from '../components/AppShell'
 import { GiftReveal } from '../components/Celebration'
 import { PhotoWithPose } from '../components/Constellation'
+import { PoseOverlay } from '../components/PoseOverlay'
 import { Badge, Button, Card } from '../components/Ui'
+import { usePoseGuide } from '../hooks/usePoseGuide'
 import { captureVideoFrame } from '../lib/images'
+import { getPoseGuideFeedback } from '../lib/poseGuide'
 import {
   getAuthResult,
   getUnlockSession,
@@ -35,6 +38,30 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : '処理に失敗しました。もう一度お試しください。'
 }
 
+function facePositionLabel(position: number, total: number) {
+  return total === 1 ? 'あなた' : `左から${position + 1}人目`
+}
+
+function faceResultLabel(face: {
+  visible: boolean
+  checked: boolean
+  ok: boolean
+}) {
+  if (!face.checked) {
+    return face.visible ? '顔を登録しました' : '顔は未登録です'
+  }
+  if (!face.visible) return '顔が見えません'
+  return face.ok ? '顔が一致しました' : '顔が一致しません'
+}
+
+function faceResultSucceeded(face: {
+  visible: boolean
+  checked: boolean
+  ok: boolean
+}) {
+  return face.ok && (face.checked || face.visible)
+}
+
 export function UnlockPage() {
   const { folderId } = useParams()
   const navigate = useNavigate()
@@ -48,6 +75,8 @@ export function UnlockPage() {
 
   const activeSession = folderId ? getUnlockSession(folderId) : null
   const peopleCount = folder?.people_count ?? 0
+  const registeredFaceCount =
+    folder?.guide.filter((person) => person.face_registered).length ?? 0
 
   // 鍵の写真の骨格の点。点がない古いフォルダは線を重ねない
   const poses = folder ? folder.guide.map((person) => person.points) : []
@@ -71,15 +100,20 @@ export function UnlockPage() {
 
         <div className="lux-unlock__copy">
           <h1>この写真のポーズを、<br />{peopleCount ? peopleCount + '人で' : 'みんなで'}再現しよう</h1>
-          <p>人数・立ち位置・ポーズがそろうと、フォルダが開きます。</p>
+          <p>人数・立ち位置・ポーズがそろうと、顔も確かめてフォルダが開きます。</p>
+          {folder && registeredFaceCount < peopleCount && (
+            <small className="face-registration-note">
+              顔が未登録の人は、最初に開いたときの顔を記憶します。
+            </small>
+          )}
         </div>
 
         {error && <div className="api-error" role="alert">{error}</div>}
 
         <ol className="lux-steps">
-          <li><span>01</span>{peopleCount ? peopleCount + '人' : '同じ人数'}でカメラの前に並ぶ</li>
-          <li><span>02</span>写真と同じ立ち位置・ポーズをとる</li>
-          <li><span>03</span>撮影して、そろっていれば開く</li>
+          <li><span>01</span>鍵写真と同じメンバー{peopleCount ? '（' + peopleCount + '人）' : ''}でカメラの前に並ぶ</li>
+          <li><span>02</span>写真と同じ立ち位置・ポーズで、顔をカメラに向ける</li>
+          <li><span>03</span>撮影して、ポーズと顔がそろえば開く</li>
         </ol>
 
         <div className="unlock-actions">
@@ -122,7 +156,7 @@ export function CameraPermissionPage() {
         </div>
         <div className="permission-copy">
           <h1>カメラを使います</h1>
-          <p>写真のポーズを再現するために、カメラへのアクセスを許可してください。</p>
+          <p>ポーズと顔を照合するために、カメラへのアクセスを許可してください。</p>
         </div>
         <div className="privacy-list">
           <span>
@@ -135,7 +169,7 @@ export function CameraPermissionPage() {
           </span>
           <span>
             <Users size={20} />
-            <span><strong>顔は見ません</strong><small>人数とポーズだけを比較します</small></span>
+            <span><strong>顔の特徴を照合</strong><small>顔の切り抜きではなく、特徴量で比較します</small></span>
           </span>
         </div>
         <div className="permission-actions">
@@ -161,8 +195,26 @@ export function CameraPage() {
   const [folder, setFolder] = useState<CapsuleDetail | null>(null)
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user')
   const [cameraReady, setCameraReady] = useState(false)
+  const [guideEnabled, setGuideEnabled] = useState(true)
   const [processing, setProcessing] = useState(false)
   const [error, setError] = useState('')
+  const poseGuide = usePoseGuide({
+    videoRef,
+    enabled: guideEnabled,
+    cameraReady,
+    sessionKey: facingMode,
+  })
+  const expectedCount = folder?.people_count ?? 0
+  const detectedCount = poseGuide.detectedCount
+  const guideFeedback = getPoseGuideFeedback(
+    poseGuide.status,
+    detectedCount,
+    expectedCount,
+  )
+  const countMatches =
+    poseGuide.status === 'ready' &&
+    expectedCount > 0 &&
+    detectedCount === expectedCount
 
   useEffect(() => {
     if (!folderId) return
@@ -232,8 +284,14 @@ export function CameraPage() {
             <X size={24} />
           </button>
           <div>
-            <span>鍵写真は{folder?.people_count ?? '—'}人</span>
-            <small>ガイドは目安です</small>
+            <span>
+              {poseGuide.status === 'ready' && expectedCount
+                ? detectedCount + ' / ' + expectedCount + '人を検出'
+                : '鍵写真は' + (folder?.people_count ?? '—') + '人'}
+            </span>
+            <small>
+              {guideEnabled ? 'MoveNet撮影ガイド' : '撮影ガイドOFF'}
+            </small>
           </div>
           <button
             className="camera-flip"
@@ -259,14 +317,27 @@ export function CameraPage() {
             playsInline
             onLoadedMetadata={() => setCameraReady(true)}
           />
-          {Array.from({ length: folder?.people_count ?? 0 }).map((_, index) => (
-            <div className={'pose-guide pose-guide--' + (index + 1)} key={index}>
-              <i /><b /><em /><span />
-            </div>
-          ))}
+          <PoseOverlay
+            videoRef={videoRef}
+            poses={poseGuide.poses}
+            mirrored={facingMode === 'user'}
+            visible={guideEnabled && poseGuide.status === 'ready'}
+          />
           <div className="camera-stage__frame" />
           {!cameraReady && !error && (
             <div className="camera-hint"><LoaderCircle className="button__spinner" size={17} />カメラを準備中</div>
+          )}
+          {cameraReady && !error && !processing && (
+            <div
+              className={'camera-hint camera-hint--' + guideFeedback.tone}
+              role="status"
+              aria-live="polite"
+            >
+              {poseGuide.status === 'loading' && (
+                <LoaderCircle className="button__spinner" size={17} />
+              )}
+              {guideFeedback.text}
+            </div>
           )}
           {error && <div className="camera-hint camera-hint--error">{error}</div>}
           {processing && (
@@ -279,9 +350,14 @@ export function CameraPage() {
         </div>
 
         <div className="camera-screen__bottom">
-          <button className="camera-help" type="button">
+          <button
+            className={'camera-help ' + (guideEnabled ? 'is-active' : '')}
+            type="button"
+            aria-pressed={guideEnabled}
+            onClick={() => setGuideEnabled((value) => !value)}
+          >
             <Image size={18} />
-            ガイド
+            ガイド{guideEnabled ? 'ON' : 'OFF'}
           </button>
           <button
             className="shutter-button"
@@ -293,8 +369,16 @@ export function CameraPage() {
             <span />
           </button>
           <div className="camera-auto">
-            <strong>{processing ? '判定中' : 'READY'}</strong>
-            <small>{processing ? 'そのまま待ってね' : '撮影できます'}</small>
+            <strong>
+              {processing ? '判定中' : countMatches ? '人数OK' : 'READY'}
+            </strong>
+            <small>
+              {processing
+                ? 'そのまま待ってね'
+                : countMatches
+                  ? '顔を向けてポーズを合わせよう'
+                  : '撮影できます'}
+            </small>
           </div>
         </div>
       </div>
@@ -321,11 +405,51 @@ export function VerifyingPage() {
   )
 }
 
+function FaceResultCard({ faces }: { faces: FacePersonResult[] }) {
+  if (faces.length === 0) return null
+  return (
+    <Card className="face-result-card">
+      <div className="face-result-card__heading">
+        <ShieldCheck size={20} />
+        <div>
+          <strong>顔認証</strong>
+          <small>鍵写真と顔の特徴を照合しました</small>
+        </div>
+      </div>
+      <div className="face-result-list" aria-label="顔認証結果">
+        {faces.map((face) => (
+          <div
+            className={
+              'face-result-row ' +
+              (faceResultSucceeded(face) ? 'is-ok' : 'is-failed')
+            }
+            key={face.position}
+          >
+            <span className="face-result-row__mark">
+              {faceResultSucceeded(face) ? <Check size={15} /> : <X size={15} />}
+            </span>
+            <div>
+              <strong>{facePositionLabel(face.position, faces.length)}</strong>
+              <small>{faceResultLabel(face)}</small>
+            </div>
+            {face.checked && face.similarity !== null && (
+              <span className="face-result-row__score">
+                類似度 {face.similarity.toFixed(2)}
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+    </Card>
+  )
+}
+
 export function ResultPage() {
   const { folderId } = useParams()
   const navigate = useNavigate()
   const result = folderId ? getAuthResult(folderId) : null
   const success = Boolean(result?.ok)
+  const faceResults = result?.result.faces ?? []
 
   if (!result) {
     return (
@@ -345,7 +469,7 @@ export function ResultPage() {
         score={result.result.score}
         message={result.result.message}
         thenPhotoUrl={result.opened.key_photo_url}
-        nowPhotoUrl={result.opened.attempt_photo_url}
+        faces={faceResults}
       />
     )
   }
@@ -366,18 +490,15 @@ export function ResultPage() {
         </div>
 
         {result.opened && (
-          <div className="comparison">
+          <div className="comparison comparison--key-only">
             <div>
               <span>鍵写真</span>
               <img className="comparison__photo" src={result.opened.key_photo_url} alt="鍵写真" />
             </div>
-            <div className="comparison__equal">＝</div>
-            <div>
-              <span>いまの写真</span>
-              <img className="comparison__photo" src={result.opened.attempt_photo_url} alt="認証時の写真" />
-            </div>
           </div>
         )}
+
+        <FaceResultCard faces={faceResults} />
 
         {success && (
           <Card className="session-card">
@@ -410,13 +531,13 @@ function SuccessResult({
   score,
   message,
   thenPhotoUrl,
-  nowPhotoUrl,
+  faces,
 }: {
   folderId: string | undefined
   score: number
   message: string
   thenPhotoUrl: string
-  nowPhotoUrl: string
+  faces: FacePersonResult[]
 }) {
   const navigate = useNavigate()
   const [revealed, setRevealed] = useState(false)
@@ -425,7 +546,7 @@ function SuccessResult({
   return (
     <AppShell>
       <div className="screen screen--result">
-        <GiftReveal thenPhotoUrl={thenPhotoUrl} nowPhotoUrl={nowPhotoUrl} onDone={handleDone} />
+        <GiftReveal thenPhotoUrl={thenPhotoUrl} onDone={handleDone} />
 
         <div className={'nt-after' + (revealed ? ' is-visible' : '')} aria-hidden={!revealed}>
           <div className="result-heading">
@@ -434,6 +555,8 @@ function SuccessResult({
             <p>{message}</p>
             <strong className="result-score">一致度 {score}%</strong>
           </div>
+
+          <FaceResultCard faces={faces} />
 
           <Card className="session-card">
             <LockKeyhole size={19} />

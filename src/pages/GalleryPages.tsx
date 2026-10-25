@@ -15,6 +15,7 @@ import {
   ApiError,
   addPhoto,
   deleteContent,
+  deleteCapsule,
   getCapsule,
   getContents,
   listMembers,
@@ -24,7 +25,11 @@ import type { CapsuleDetail, MemberView, OpenedContents } from '../api/types'
 import { AppShell, PageHeader } from '../components/AppShell'
 import { Badge, Button, Card, EmptyState } from '../components/Ui'
 import { normalizeImage } from '../lib/images'
-import { clearUnlockSession, getUnlockSession } from '../lib/unlockSession'
+import {
+  clearCapsuleSessionData,
+  clearUnlockSession,
+  getUnlockSession,
+} from '../lib/unlockSession'
 
 function folderPath(folderId: string | undefined, suffix: string) {
   return '/folders/' + (folderId ?? '') + suffix
@@ -120,10 +125,6 @@ export function GalleryPage() {
     () => data?.contents.filter((item) => item.type === 'photo' && item.url) ?? [],
     [data],
   )
-  const messages = useMemo(
-    () => data?.contents.filter((item) => item.type === 'message') ?? [],
-    [data],
-  )
 
   useEffect(() => {
     if (!folderId) return
@@ -207,12 +208,6 @@ export function GalleryPage() {
         )}
         {error && <div className="api-error" role="alert">{error}<button onClick={() => void reload()}>再読み込み</button></div>}
 
-        {!loading && !error && messages.map((message) => (
-          <article className="album-note" key={message.content_id}>
-            <small>{formatDate(message.created_at)}</small>
-            <p>{message.text}</p>
-          </article>
-        ))}
 
         {!loading && !error && photos.length === 0 && (
           <EmptyState
@@ -460,9 +455,12 @@ export function UploadPage() {
 
 export function FolderSettingsPage() {
   const { folderId } = useParams()
+  const navigate = useNavigate()
   const [folder, setFolder] = useState<CapsuleDetail | null>(null)
   const [members, setMembers] = useState<MemberView[]>([])
   const [error, setError] = useState('')
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
     if (!folderId) return
@@ -473,6 +471,21 @@ export function FolderSettingsPage() {
       })
       .catch((reason: unknown) => setError(errorMessage(reason)))
   }, [folderId])
+
+  const removeFolder = async () => {
+    if (!folderId) return
+    setDeleting(true)
+    setError('')
+    try {
+      await deleteCapsule(folderId)
+      clearCapsuleSessionData(folderId)
+      navigate('/folders', { replace: true })
+    } catch (reason) {
+      setError(errorMessage(reason))
+      setDeleting(false)
+    }
+  }
+
 
   return (
     <AppShell>
@@ -519,10 +532,33 @@ export function FolderSettingsPage() {
 
             <section className="danger-zone">
               <h3>フォルダの削除</h3>
-              <p>削除APIがバックエンドにまだ無いため、この操作は接続待ちです。</p>
-              <Button variant="danger" fullWidth disabled>
-                <Trash2 size={18} />バックエンド対応待ち
-              </Button>
+              <p>参加者は誰でも削除できます。鍵写真・写真・顔の特徴量・招待情報がすべて消えます。</p>
+              {confirmingDelete ? (
+                <div className="delete-confirmation" role="alertdialog" aria-labelledby="delete-folder-title">
+                  <strong id="delete-folder-title">「{folder.name}」を削除しますか？</strong>
+                  <p>この操作は元に戻せません。</p>
+                  <div>
+                    <Button
+                      variant="ghost"
+                      disabled={deleting}
+                      onClick={() => setConfirmingDelete(false)}
+                    >
+                      キャンセル
+                    </Button>
+                    <Button
+                      variant="danger"
+                      loading={deleting}
+                      onClick={() => void removeFolder()}
+                    >
+                      <Trash2 size={18} />完全に削除
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <Button variant="danger" fullWidth onClick={() => setConfirmingDelete(true)}>
+                  <Trash2 size={18} />フォルダを削除
+                </Button>
+              )}
             </section>
           </>
         )}

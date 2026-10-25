@@ -20,6 +20,7 @@ export interface GuidePerson {
   position: number
   angles: Record<string, number | null>
   points: Record<string, [number, number] | null>
+  face_registered: boolean
 }
 
 export interface CapsuleDetail extends CapsuleSummary {
@@ -44,16 +45,14 @@ export interface UploadTicket {
 
 export interface ContentView {
   content_id: string
-  type: 'message' | 'photo'
+  type: 'photo'
   author_id: string
   created_at: string
-  text: string | null
-  url: string | null
+  url: string
 }
 
 export interface OpenedContents {
   key_photo_url: string
-  attempt_photo_url: string
   contents: ContentView[]
   url_expires_in: number
 }
@@ -63,7 +62,18 @@ export type OpenFailureReason =
   | 'pose_mismatch'
   | 'body_not_visible'
   | 'no_person'
+  | 'face_not_visible'
+  | 'face_mismatch'
   | null
+
+export interface FacePersonResult {
+  position: number
+  visible: boolean
+  checked: boolean
+  ok: boolean
+  similarity: number | null
+  others: number | null
+}
 
 export interface MatchResult {
   ok: boolean
@@ -73,6 +83,7 @@ export interface MatchResult {
   expected_people: number
   detected_people: number
   mirrored: boolean
+  faces: FacePersonResult[]
 }
 
 export interface OpenResponse {
@@ -88,6 +99,23 @@ export interface MemberView {
   user_id: string
   role: CapsuleRole
   email: string | null
+}
+
+export interface InviteCreated {
+  token: string
+  expires_at: string
+}
+
+export interface InvitePreview {
+  capsule_id: string
+  capsule_name: string
+  open_date: string | null
+  days_until_open: number | null
+  people_count: number
+  members_count: number
+  invited_by: string
+  expires_at: string
+  already_member: boolean
 }
 
 export interface ApiErrorPayload {

@@ -1713,3 +1713,130 @@ html {
     transition: none;
   }
 }
+
+/* =====================================================================
+ * フロント担当の新しい画面（招待・アカウント・顔の判定・撮影の補助）を紙とセピアに合わせる
+ * ===================================================================== */
+
+/* フォルダ一覧: 件数の横にアカウントへの入口 */
+.lux-home__header {
+  gap: 14px;
+}
+
+.lux-count {
+  margin-left: auto;
+}
+
+.lux-account {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  align-self: center;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: rgba(251, 246, 234, 0.7);
+  color: var(--ink);
+  transition: background 0.3s ease;
+}
+
+.lux-account:hover {
+  background: #fbf6ea;
+}
+
+/* 入力欄のフォーカス: 紫をやめて茶色に */
+.development-account-field input {
+  border-color: var(--line);
+  background: rgba(251, 246, 234, 0.9);
+  color: var(--ink);
+}
+
+.development-account-field input:focus,
+.member-input:focus-within {
+  border-color: rgba(140, 98, 57, 0.55);
+  box-shadow: 0 0 0 4px rgba(140, 98, 57, 0.1);
+}
+
+.icon-button:active {
+  background: rgba(140, 98, 57, 0.1);
+}
+
+.face-registration-note {
+  color: var(--muted);
+  font-family: var(--font-hand);
+  font-size: 12px;
+}
+
+/* 顔の判定の結果 */
+.face-result-card {
+  border-color: var(--line);
+  background: #fbf6ea;
+}
+
+.face-result-row.is-ok .face-result-row__mark {
+  background: rgba(79, 122, 90, 0.14);
+  color: var(--green);
+}
+
+.face-result-row.is-failed .face-result-row__mark {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+/* 成功の演出で写真が1枚（鍵の写真だけ）のときは、横にずらさず中央で少し大きく */
+.nt-reveal--single.nt-stage-reveal .nt-photo--then {
+  transform: rotate(-3deg) scale(1.15);
+}
+
+/* 招待 */
+.invite-url {
+  border-color: var(--line);
+  background: #f6eedd;
+  color: var(--ink);
+}
+
+.invite-hero > span,
+.invite-accept-visual > span {
+  background: linear-gradient(135deg, #a8774a, var(--wax-red));
+  box-shadow: 0 12px 28px rgba(58, 46, 36, 0.22);
+  color: #fbf6ea;
+}
+
+/* フォルダの削除の確認 */
+.delete-confirmation {
+  border-color: rgba(176, 71, 58, 0.35);
+  background: #fbefe6;
+}
+
+.delete-confirmation > strong {
+  color: #7d2d2b;
+}
+
+.delete-confirmation > p {
+  color: #8e5954;
+}
+
+/* 撮影の補助（カメラの上）: ミント色をやめてクリーム色に */
+.camera-help.is-active,
+.camera-auto strong {
+  color: #fbf0d6;
+}
+
+.camera-help:focus-visible {
+  outline-color: #fbf0d6;
+}
+
+.camera-hint--success {
+  background: rgba(240, 232, 210, 0.95);
+  color: #2f4a35;
+}
+
+.camera-hint--success svg {
+  color: var(--green);
+}
+
+.camera-hint--warning {
+  background: rgba(251, 236, 210, 0.95);
+  color: #5d3714;
+}

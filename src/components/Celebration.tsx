@@ -26,7 +26,8 @@ export function GiftReveal({
   onDone,
 }: {
   thenPhotoUrl: string
-  nowPhotoUrl: string
+  /** 今撮った写真。サーバーに残さない方針なので無いこともある（そのときは鍵の写真だけを見せる） */
+  nowPhotoUrl?: string
   onDone: () => void
 }) {
   const [stage, setStage] = useState<Stage>(() => (prefersReducedMotion() ? 'reveal' : 'tap'))
@@ -47,7 +48,7 @@ export function GiftReveal({
   }
 
   return (
-    <div className={'nt-reveal nt-stage-' + stage}>
+    <div className={'nt-reveal nt-stage-' + stage + (nowPhotoUrl ? '' : ' nt-reveal--single')}>
       <div className="nt-halo" aria-hidden="true" />
 
       <div className="nt-reveal__intro">
@@ -87,10 +88,12 @@ export function GiftReveal({
         <img src={thenPhotoUrl} alt="鍵の写真（あの日）" />
         <figcaption>あの日</figcaption>
       </figure>
-      <figure className="nt-photo nt-photo--now">
-        <img src={nowPhotoUrl} alt="いま撮った写真（今日）" />
-        <figcaption>今日</figcaption>
-      </figure>
+      {nowPhotoUrl && (
+        <figure className="nt-photo nt-photo--now">
+          <img src={nowPhotoUrl} alt="いま撮った写真（今日）" />
+          <figcaption>今日</figcaption>
+        </figure>
+      )}
 
       {stage === 'tap' && (
         <>

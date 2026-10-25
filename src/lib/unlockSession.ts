@@ -46,6 +46,22 @@ export function clearUnlockSession(capsuleId: string) {
   sessionStorage.removeItem(sessionKey(capsuleId))
 }
 
+export function clearCapsuleSessionData(capsuleId: string) {
+  sessionStorage.removeItem(sessionKey(capsuleId))
+  sessionStorage.removeItem(RESULT_PREFIX + capsuleId)
+}
+
+export function clearAllCapsuleSessionData() {
+  const keys = Array.from({ length: sessionStorage.length }, (_, index) =>
+    sessionStorage.key(index),
+  )
+  keys.forEach((key) => {
+    if (key?.startsWith(STORAGE_PREFIX) || key?.startsWith(RESULT_PREFIX)) {
+      sessionStorage.removeItem(key)
+    }
+  })
+}
+
 export function saveAuthResult(capsuleId: string, response: OpenResponse) {
   sessionStorage.setItem(RESULT_PREFIX + capsuleId, JSON.stringify(response))
 }

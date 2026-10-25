@@ -43,6 +43,7 @@ class GuidePerson(BaseModel):
     position: int = Field(description="左から何番目か（0始まり）")
     angles: dict[str, float | None]
     points: dict[str, list[float] | None] = Field(description="体の12点の正規化座標 [x, y]（0〜1）")
+    face_registered: bool = Field(default=False, description="顔の記憶があるか（鍵の写真で顔が見えなかった人は、最初に開けたときに覚える）")
 
 
 class CapsuleSummary(BaseModel):
@@ -73,21 +74,19 @@ class CapsuleDetail(CapsuleSummary):
 
 
 class AddContentRequest(BaseModel):
-    type: Literal["message", "photo"]
-    text: str | None = Field(default=None, max_length=2000, description="type=message のとき必須")
-    s3_key: str | None = Field(default=None, description="type=photo のとき必須（purpose=content でアップロードしたもの）")
+    type: Literal["photo"]
+    s3_key: str = Field(description="purpose=content でアップロードした写真")
 
 
 class ContentMeta(BaseModel):
     content_id: str
-    type: Literal["message", "photo"]
+    type: Literal["photo"]
     author_id: str
     created_at: dt.datetime
 
 
 class ContentView(ContentMeta):
-    text: str | None = None
-    url: str | None = None
+    url: str
 
 
 class OpenRequest(BaseModel):
@@ -119,20 +118,30 @@ class PersonResultOut(BaseModel):
     mean_point_diff: float | None = None
 
 
+class FacePersonOut(BaseModel):
+    position: int = Field(description="左から何番目か（0始まり）")
+    visible: bool = Field(description="顔が見えたか")
+    checked: bool = Field(description="顔の記憶があって判定したか")
+    ok: bool
+    similarity: float | None = Field(description="顔の記憶のうち、いちばん似ている顔との類似度（-1〜1）")
+    others: float | None = Field(description="ほかの立ち位置の人の記憶との、いちばん高い類似度")
+
+
 class MatchResultOut(BaseModel):
     ok: bool
-    reason: Literal["count_mismatch", "pose_mismatch", "body_not_visible", "no_person"] | None
+    reason: Literal["count_mismatch", "pose_mismatch", "body_not_visible", "no_person",
+                    "face_not_visible", "face_mismatch"] | None
     score: int = Field(description="一致度ゲージ用 0〜100。許容値ちょうどで70")
     message: str = Field(description="そのまま画面に出せる声かけ")
     expected_people: int
     detected_people: int
     mirrored: bool
     people: list[PersonResultOut]
+    faces: list[FacePersonOut] = Field(default_factory=list, description="顔の判定（ポーズが合ったときだけ入る）")
 
 
 class OpenedContents(BaseModel):
     key_photo_url: str
-    attempt_photo_url: str
     contents: list[ContentView]
     url_expires_in: int
 
@@ -173,15 +182,3 @@ class InvitePreview(BaseModel):
     invited_by: str
     expires_at: dt.datetime
     already_member: bool
-
-
-class AlbumEntry(BaseModel):
-    opened_at: dt.datetime
-    photo_url: str
-    score: int
-
-
-class AlbumResponse(BaseModel):
-    key_photo_url: str
-    entries: list[AlbumEntry]
-    url_expires_in: int

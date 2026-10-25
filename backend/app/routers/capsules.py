@@ -1,7 +1,7 @@
-"""カプセルの作成（鍵の抽出）・中身の登録・エモ認証による開封・ライブラリ・認証アルバム。
+"""カプセルの作成（鍵の抽出）・写真の登録・エモ認証による開封・ライブラリ。
 
 カプセルは「ポーズで開ける共有アルバム」。ポーズが一致すると解除セッション（X-Unlock-Token）を発行し、
-その間だけライブラリ（中身の閲覧・削除、認証アルバム）を使える。入るたびにポーズで解除する。
+その間だけライブラリ（写真の閲覧・削除）を使える。入るたびにポーズで解除する。
 """
 
 from __future__ import annotations
@@ -17,18 +17,26 @@ import uuid
 from fastapi import APIRouter, Depends, Header, Response
 from PIL import Image
 
-from app.deps import current_user, get_detector, get_match_config, get_repository, get_storage, settings_dep
+from app.deps import (
+    current_user,
+    get_detector,
+    get_face_config,
+    get_face_encoder,
+    get_match_config,
+    get_repository,
+    get_storage,
+    settings_dep,
+)
 from app.errors import ApiError
 from app.pose.angles import PersonPose
 from app.pose.config import MatchConfig
 from app.pose.base import Detector, PoseExtractionError, draw_overlay, load_image
+from app.pose.face import FaceConfig, FaceEncoder, assign_faces, match_faces, new_memory, update_memory
 from app.pose.matcher import match_poses
 from app.repository import Repository
 from app.routers.uploads import upload_prefix
 from app.schemas import (
     AddContentRequest,
-    AlbumEntry,
-    AlbumResponse,
     CapsuleDetail,
     CapsuleListItem,
     CapsuleSummary,
@@ -50,7 +58,8 @@ log = logging.getLogger("emo")
 
 JST = dt.timezone(dt.timedelta(hours=9))
 # 失敗回数に数えるのは「揃って撮ったのに違った」ときだけ。誰も写っていない・体が切れているのは数えない
-COUNTED_FAILURES = ("count_mismatch", "pose_mismatch")
+COUNTED_FAILURES = ("count_mismatch", "pose_mismatch", "face_mismatch")
+MAX_PHOTOS = 20
 
 ERRORS = {
     400: {"model": ErrorResponse},
@@ -72,7 +81,14 @@ def _parse_dt(value: str | None) -> dt.datetime | None:
     return dt.datetime.fromisoformat(value) if value else None
 
 
-def _load_uploaded_image(storage: Storage, settings: Settings, key: str, prefix: str) -> Image.Image:
+def _load_uploaded_image(
+    storage: Storage,
+    settings: Settings,
+    key: str,
+    prefix: str,
+    *,
+    delete_after_load: bool = False,
+) -> Image.Image:
     if not key.startswith(prefix) or ".." in key:
         raise ApiError(400, "invalid_s3_key", "この画像は使えないみたい。もう一度アップロードしてね")
     size = storage.size(key)
@@ -80,8 +96,12 @@ def _load_uploaded_image(storage: Storage, settings: Settings, key: str, prefix:
         raise ApiError(404, "upload_not_found", "画像が見つからなかったよ。アップロードが終わってから送ってね")
     if size > settings.max_upload_bytes:
         raise ApiError(413, "image_too_large", "画像が大きすぎるみたい。10MBまでにしてね")
+    data = storage.get_bytes(key)
+    if delete_after_load:
+        # 認証写真は判定用のメモリに読み込んだ直後に削除し、アルバムとして保存しない。
+        storage.delete(key)
     try:
-        return load_image(storage.get_bytes(key))
+        return load_image(data)
     except Exception as e:  # Pillow が読めない形式
         raise ApiError(400, "invalid_image", "画像を読み込めなかったよ。JPEGかPNGで送ってね") from e
 
@@ -157,13 +177,13 @@ def _detail(capsule: dict, role: str, repo: Repository, storage: Storage, settin
         preview_url=storage.presign_get(capsule["preview_key"], expires) if capsule.get("preview_key") else None,
         url_expires_in=expires,
         guide=[
-            GuidePerson(position=i, angles=p["angles"], points=p.get("points", {}))
+            GuidePerson(position=i, angles=p["angles"], points=p.get("points", {}), face_registered=bool(p.get("faces")))
             for i, p in enumerate(capsule["key_pose"]["people"])
         ],
         can_open_now=_is_open_day(capsule, settings) and locked_until is None,
         locked_until=locked_until,
         attempts_left=_attempts_left(settings, capsule.get("fail_count", 0), locked_until),
-        contents_count=len(repo.list_contents(capsule["capsule_id"])),
+        contents_count=sum(c.get("type") == "photo" for c in repo.list_contents(capsule["capsule_id"])),
         opened_at=_parse_dt(capsule.get("opened_at")),
     )
 
@@ -181,6 +201,7 @@ def create_capsule(
     repo: Repository = Depends(get_repository),
     storage: Storage = Depends(get_storage),
     detector: Detector = Depends(get_detector),
+    face_encoder: FaceEncoder | None = Depends(get_face_encoder),
     settings: Settings = Depends(settings_dep),
 ) -> CapsuleDetail:
     image = _load_uploaded_image(storage, settings, body.key_photo_s3_key, upload_prefix(user["user_id"], "key"))
@@ -188,6 +209,9 @@ def create_capsule(
         people = detector.extract_key(image)
     except PoseExtractionError as e:
         raise ApiError(422, e.code, e.message, detected_people=e.detected_people) from e
+    # 鍵の写真の顔を、その人の最初の「顔の記憶」にする（顔が見えない人は、最初に開けたときの顔から覚える）
+    faces = (assign_faces(people, face_encoder.encode(image), image.width, image.height)
+             if face_encoder else [None] * len(people))
 
     capsule_id = uuid.uuid4().hex[:12]
     preview = io.BytesIO()
@@ -202,8 +226,10 @@ def create_capsule(
         "open_date": body.open_date.isoformat() if body.open_date else None,
         "key_photo_key": body.key_photo_s3_key,
         "preview_key": preview_key,
-        # 鍵として保存するのは関節角度と体の点の座標だけ（顔の特徴は保存しない）
-        "key_pose": {"version": 1, "people": [{**p.to_dict(), "points": p.guide_points()} for p in people]},
+        # 鍵として保存するのは、点の位置・関節角度と、顔の特徴の数字（顔の画像は保存しない）
+        "key_pose": {"version": 1, "people": [
+            {**p.to_dict(), "points": p.guide_points(), "faces": new_memory(f)} for p, f in zip(people, faces)
+        ]},
         "status": "locked",
         "fail_count": 0,
         "locked_until": None,
@@ -212,7 +238,8 @@ def create_capsule(
     }
     repo.create_capsule(capsule)
     repo.add_member(capsule_id, user["user_id"], "owner", user.get("email"))
-    log.info(json.dumps({"event": "capsule_created", "capsule_id": capsule_id, "people": len(people)}))
+    log.info(json.dumps({"event": "capsule_created", "capsule_id": capsule_id, "people": len(people),
+                         "faces": sum(f is not None for f in faces)}))
     return _detail(capsule, "owner", repo, storage, settings)
 
 
@@ -254,8 +281,8 @@ def get_capsule(
     "/{capsule_id}/contents",
     response_model=ContentMeta,
     status_code=201,
-    responses=ERRORS,
-    summary="中身（写真・メッセージ）を追加（メンバーならいつでも）",
+    responses={**ERRORS, 409: {"model": ErrorResponse}},
+    summary="写真を追加（メンバーならいつでも）",
 )
 def add_content(
     capsule_id: str,
@@ -268,20 +295,16 @@ def add_content(
     # 追加は中身を見せないので解除は不要（作成時の登録も、解除後のライブラリからの追加もこれを使う）
     _get_capsule_for_member(repo, capsule_id, user["user_id"])
 
-    if body.type == "message":
-        if not body.text or not body.text.strip():
-            raise ApiError(400, "text_required", "メッセージを書いてね")
-    else:
-        if not body.s3_key:
-            raise ApiError(400, "s3_key_required", "写真をアップロードしてね")
-        _load_uploaded_image(storage, settings, body.s3_key, upload_prefix(user["user_id"], "content"))
+    photo_count = sum(c.get("type") == "photo" for c in repo.list_contents(capsule_id))
+    if photo_count >= MAX_PHOTOS:
+        raise ApiError(409, "photo_limit_reached", "このフォルダに追加できる写真は20枚までだよ")
+    _load_uploaded_image(storage, settings, body.s3_key, upload_prefix(user["user_id"], "content"))
 
     content = {
         "capsule_id": capsule_id,
         "content_id": uuid.uuid4().hex[:12],
-        "type": body.type,
-        "text": body.text if body.type == "message" else None,
-        "s3_key": body.s3_key if body.type == "photo" else None,
+        "type": "photo",
+        "s3_key": body.s3_key,
         "author_id": user["user_id"],
         "created_at": _now().isoformat(),
     }
@@ -293,13 +316,13 @@ def _content_views(repo: Repository, storage: Storage, capsule_id: str, expires:
     return [
         ContentView(
             content_id=c["content_id"],
-            type=c["type"],
+            type="photo",
             author_id=c["author_id"],
             created_at=c["created_at"],
-            text=c.get("text"),
-            url=storage.presign_get(c["s3_key"], expires) if c.get("s3_key") else None,
+            url=storage.presign_get(c["s3_key"], expires),
         )
         for c in repo.list_contents(capsule_id)
+        if c.get("type") == "photo" and c.get("s3_key")
     ]
 
 
@@ -317,6 +340,8 @@ def open_capsule(
     storage: Storage = Depends(get_storage),
     detector: Detector = Depends(get_detector),
     config: MatchConfig = Depends(get_match_config),
+    face_encoder: FaceEncoder | None = Depends(get_face_encoder),
+    face_config: FaceConfig = Depends(get_face_config),
     settings: Settings = Depends(settings_dep),
 ) -> OpenResponse:
     started = time.perf_counter()
@@ -330,9 +355,29 @@ def open_capsule(
         raise ApiError(423, "locked", "たくさん試したので少しお休み。時間をおいてまた挑戦してね",
                        locked_until=locked_until.isoformat())
 
-    image = _load_uploaded_image(storage, settings, body.s3_key, upload_prefix(user["user_id"], "attempt"))
+    image = _load_uploaded_image(
+        storage,
+        settings,
+        body.s3_key,
+        upload_prefix(user["user_id"], "attempt"),
+        delete_after_load=True,
+    )
     key_people = [PersonPose.from_dict(p) for p in capsule["key_pose"]["people"]]
-    result = match_poses(key_people, detector.detect(image), config)
+    attempt_people = detector.detect(image)
+    result = match_poses(key_people, attempt_people, config)
+
+    # ポーズが合ったら、顔も当時の人（と、これまで開けたときの顔）と比べる
+    attempt_faces: list = []
+    if result.ok and face_encoder:
+        attempt_faces = assign_faces(sorted(attempt_people, key=lambda p: p.hip_center_x),
+                                     face_encoder.encode(image), image.width, image.height)
+        if result.mirrored:
+            attempt_faces = attempt_faces[::-1]  # 鍵の何番目の人に対応するかにそろえる
+        memories = [p.get("faces", []) for p in capsule["key_pose"]["people"]]
+        face_result = match_faces(memories, attempt_faces, face_config)
+        result.faces = [p.to_dict() for p in face_result.people]
+        if not face_result.ok:
+            result.ok, result.reason, result.message = False, face_result.reason, face_result.message
 
     fields: dict = {}
     fail_count = capsule.get("fail_count", 0)
@@ -341,10 +386,14 @@ def open_capsule(
         fields = {"status": "opened", "fail_count": 0, "locked_until": None}
         if not capsule.get("opened_at"):
             fields["opened_at"] = _now().isoformat()
-        repo.add_open_record({
-            "capsule_id": capsule_id, "opened_at": _now().isoformat(), "photo_key": body.s3_key,
-            "score": result.score, "user_id": user["user_id"],
-        })
+        if attempt_faces:
+            # 開けたときの顔を記憶に加える。開けるたびに今の顔へ更新されていくので、年月で顔が変わってもついていける
+            key_pose = capsule["key_pose"]
+            key_pose["people"] = [
+                {**p, "faces": update_memory(p.get("faces", []), f, face_config.memory)}
+                for p, f in zip(key_pose["people"], attempt_faces)
+            ]
+            fields["key_pose"] = key_pose
     elif result.reason in COUNTED_FAILURES:
         fail_count += 1
         if settings.max_failures > 0 and fail_count >= settings.max_failures:
@@ -360,7 +409,8 @@ def open_capsule(
         "event": "open_attempt",
         "capsule_id": capsule_id,
         "detected_people": result.detected_people,
-        "diffs": [p.mean_diff_deg and round(p.mean_diff_deg, 1) for p in result.people],
+        "point_diffs": [p.mean_point_diff and round(p.mean_point_diff, 2) for p in result.people],
+        "face_similarity": [f["similarity"] for f in result.faces],
         "ok": result.ok,
         "reason": result.reason,
         "fail_count": fail_count,
@@ -373,7 +423,6 @@ def open_capsule(
         expires = settings.view_url_expires
         opened = OpenedContents(
             key_photo_url=storage.presign_get(capsule["key_photo_key"], expires),
-            attempt_photo_url=storage.presign_get(body.s3_key, expires),
             contents=_content_views(repo, storage, capsule_id, expires),
             url_expires_in=expires,
         )
@@ -410,48 +459,20 @@ def list_contents(
 ) -> OpenedContents:
     capsule, _ = _get_capsule_for_member(repo, capsule_id, user["user_id"])
     _require_unlock(repo, capsule_id, user["user_id"], x_unlock_token)
-    records = repo.list_open_records(capsule_id)
     expires = settings.view_url_expires
     return OpenedContents(
         key_photo_url=storage.presign_get(capsule["key_photo_key"], expires),
-        attempt_photo_url=storage.presign_get(records[-1]["photo_key"], expires),
         contents=_content_views(repo, storage, capsule_id, expires),
         url_expires_in=expires,
     )
 
-
-@router.get(
-    "/{capsule_id}/album",
-    response_model=AlbumResponse,
-    responses=UNLOCK_ERRORS,
-    summary="認証アルバム（開封に成功したときの写真）。解除中のみ",
-)
-def get_album(
-    capsule_id: str,
-    user: dict = Depends(current_user),
-    x_unlock_token: str | None = Header(default=None),
-    repo: Repository = Depends(get_repository),
-    storage: Storage = Depends(get_storage),
-    settings: Settings = Depends(settings_dep),
-) -> AlbumResponse:
-    capsule, _ = _get_capsule_for_member(repo, capsule_id, user["user_id"])
-    _require_unlock(repo, capsule_id, user["user_id"], x_unlock_token)
-    expires = settings.view_url_expires
-    return AlbumResponse(
-        key_photo_url=storage.presign_get(capsule["key_photo_key"], expires),
-        entries=[
-            AlbumEntry(opened_at=r["opened_at"], photo_url=storage.presign_get(r["photo_key"], expires), score=r["score"])
-            for r in repo.list_open_records(capsule_id)
-        ],
-        url_expires_in=expires,
-    )
 
 
 @router.delete(
     "/{capsule_id}/contents/{content_id}",
     status_code=204,
     responses=UNLOCK_ERRORS,
-    summary="中身を削除（解除中のみ。追加した本人か作成者）",
+    summary="中身を削除（解除中のみ。フォルダの参加者なら誰の写真でも消せる）",
 )
 def delete_content(
     capsule_id: str,
@@ -461,15 +482,53 @@ def delete_content(
     repo: Repository = Depends(get_repository),
     storage: Storage = Depends(get_storage),
 ) -> Response:
-    _, member = _get_capsule_for_member(repo, capsule_id, user["user_id"])
+    _get_capsule_for_member(repo, capsule_id, user["user_id"])
     _require_unlock(repo, capsule_id, user["user_id"], x_unlock_token)
     content = repo.get_content(capsule_id, content_id)
     if content is None:
         raise ApiError(404, "content_not_found", "その写真は見つからなかったよ。もう消えているかも")
-    if content["author_id"] != user["user_id"] and member["role"] != "owner":
-        raise ApiError(403, "not_author", "消せるのは、追加した本人かカプセルを作った人だけだよ")
+    # 共有フォルダなので、参加者なら誰が追加した写真でも消せる
     repo.delete_content(content)
     if content.get("s3_key"):
         storage.delete(content["s3_key"])
     log.info(json.dumps({"event": "content_deleted", "capsule_id": capsule_id}))
+    return Response(status_code=204)
+
+
+# フォルダを消すとき、アイテムのどの項目に画像（S3）のキーが入っているか
+_S3_KEY_FIELDS = {
+    "Capsule": ("key_photo_key", "preview_key"),
+    "Content": ("s3_key",),
+    # 旧バージョンが保存した認証写真も、フォルダ削除時には確実に消す。
+    "OpenRecord": ("photo_key",),
+    "AttemptRef": ("s3_key",),
+}
+
+
+@router.delete(
+    "/{capsule_id}",
+    status_code=204,
+    responses=ERRORS,
+    summary="フォルダを削除（参加者なら誰でも）。鍵の写真・中身・顔の特徴量をすべて消す",
+)
+def delete_capsule(
+    capsule_id: str,
+    user: dict = Depends(current_user),
+    repo: Repository = Depends(get_repository),
+    storage: Storage = Depends(get_storage),
+) -> Response:
+    _get_capsule_for_member(repo, capsule_id, user["user_id"])
+    # DynamoDB: フォルダ本体（鍵のポーズ・顔の記憶）、メンバー、写真、招待、解除セッション
+    items = repo.delete_capsule(capsule_id)
+    # S3: 鍵の写真、骨格プレビュー、中身の写真（加えて旧バージョンの認証写真）
+    keys = {item[f] for item in items for f in _S3_KEY_FIELDS.get(item.get("entity", ""), ()) if item.get(f)}
+    failed = 0
+    for key in keys:
+        try:
+            storage.delete(key)
+        except Exception:  # 1つ消せなくても残りは消す（バケットは非公開なので見られることはない）
+            failed += 1
+            log.exception("failed to delete s3 object")
+    log.info(json.dumps({"event": "capsule_deleted", "capsule_id": capsule_id,
+                         "items": len(items), "objects": len(keys), "failed_objects": failed}))
     return Response(status_code=204)

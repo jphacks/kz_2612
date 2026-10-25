@@ -1,0 +1,23 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
+      "Resource": "arn:aws:s3:::emo-capsule-fukushima-1024/*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": "s3:ListBucket",
+      "Resource": "arn:aws:s3:::emo-capsule-fukushima-1024"
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:DeleteItem", "dynamodb:Query"],
+      "Resource": [
+        "arn:aws:dynamodb:ap-northeast-1:024363637530:table/emo-timecapsule",
+        "arn:aws:dynamodb:ap-northeast-1:024363637530:table/emo-timecapsule/index/GSI1"
+      ]
+    }
+  ]
+}

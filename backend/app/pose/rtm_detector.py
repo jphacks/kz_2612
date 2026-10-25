@@ -20,7 +20,11 @@ DEFAULT_DET_PATH = MODELS / "rtm_det_yolox_m.onnx"
 DEFAULT_POSE_PATH = MODELS / "rtm_pose_rtmpose_m.onnx"
 
 # COCO の17点 → MediaPipe の33点の番号（角度の計算は MediaPipe の番号で書いてあるのでそろえる）
-COCO_TO_MP = {5: 11, 6: 12, 7: 13, 8: 14, 9: 15, 10: 16, 11: 23, 12: 24, 13: 25, 14: 26, 15: 27, 16: 28}
+# 鼻・目・耳は、顔をどの人に結びつけるかに使う
+COCO_TO_MP = {
+    0: 0, 1: 2, 2: 5, 3: 7, 4: 8,
+    5: 11, 6: 12, 7: 13, 8: 14, 9: 15, 10: 16, 11: 23, 12: 24, 13: 25, 14: 26, 15: 27, 16: 28,
+}
 L_SHOULDER, R_SHOULDER = 5, 6
 
 
