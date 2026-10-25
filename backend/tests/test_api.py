@@ -132,9 +132,10 @@ def test_full_flow(env):
     assert res.json()["error"]["code"] == "unlock_required"
 
     # ポーズ違い
-    detector.people = [pose(0.3), pose(0.7, right_elbow=60.0)]
+    detector.people = [pose(0.3), pose(0.7, right_elbow=30.0, left_shoulder=160.0, right_shoulder=30.0, left_knee=90.0)]
     res = open_with(client, cid).json()
     assert res["ok"] is False
+    assert res["result"]["score"] < 55
     assert res["result"]["reason"] == "pose_mismatch"
     assert "右の人の右ひじ" in res["result"]["message"]
     assert res["attempts_left"] is None
