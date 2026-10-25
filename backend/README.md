@@ -94,6 +94,23 @@ RTMPose は画面外の関節も推測して返すので、確からしさ0.5未
 | `EMO_RTM_DET_PATH` / `EMO_RTM_POSE_PATH` | `models/rtm_*.onnx` | RTMPose のモデルの場所 |
 | `EMO_DETECTION_CONFIDENCE` | 0.2 | MediaPipe の人物検出のしきい値 |
 | `EMO_POSE_MODEL_PATH` | `models/pose_landmarker_full.task` | MediaPipe のモデルの場所 |
+| `EMO_FACE_DET_PATH` / `EMO_FACE_REC_PATH` | `models/face_*.onnx` | 顔の検出（YuNet）・特徴（SFace）のモデルの場所 |
+| `EMO_BACKEND` | local | `local`（JSONファイル＋ローカルディスク）／`aws`（DynamoDB＋S3） |
+| `EMO_BUCKET` | emo-timecapsule | S3 バケット名（backend=aws のとき） |
+| `EMO_TABLE` | emo-timecapsule | DynamoDB テーブル名（backend=aws のとき） |
+| `AWS_REGION` | ap-northeast-1 | AWS のリージョン |
+| `EMO_AUTH_MODE` | development | `development`（X-User-* ヘッダー）／`cognito`（API Gateway の JWT claims を必須にする） |
+| `EMO_UPLOAD_URL_EXPIRES` | 300 | アップロード用の署名付きURLの有効秒数 |
+| `EMO_VIEW_URL_EXPIRES` | 60 | 閲覧用の署名付きURLの有効秒数 |
+| `EMO_MAX_UPLOAD_BYTES` | 10485760 | アップロードできる画像の最大バイト数（10MB） |
+| `EMO_MAX_FAILURES` | 0 | 何回失敗したらロックするか。0 ならロックしない |
+| `EMO_LOCK_MINUTES` | 10 | ロックの長さ（分）。`EMO_MAX_FAILURES` が 1 以上のときだけ使う |
+| `EMO_IGNORE_OPEN_DATE` | false | デモ用。true にすると開封日前でも開けられる |
+| `EMO_INVITE_DAYS` | 14 | 招待リンクの有効日数 |
+| `EMO_UNLOCK_MINUTES` | 720 | ポーズで解除してから中身を見られる時間（分。12時間） |
+| `EMO_CORS_ORIGINS` | `*` | 許可するオリジン（カンマ区切り） |
+| `EMO_LOCAL_DATA_DIR` | `backend/.local_data` | backend=local のときの保存先 |
+| `EMO_PUBLIC_BASE_URL` | `http://localhost:8000` | 招待リンクなどに使う公開URL |
 
 ## 照合結果（API でフロントに返す想定の形）
 

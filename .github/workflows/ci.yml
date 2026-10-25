@@ -42,6 +42,9 @@ jobs:
         working-directory: backend
     steps:
       - uses: actions/checkout@v4
+        with:
+          # PR のとき、ベースブランチとの差分（追加・変更されたファイル）を取るために履歴が要る
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12" # Lambda のイメージに合わせる
@@ -56,3 +59,15 @@ jobs:
       - run: ruff check
       - run: ruff format --check
       - run: pytest
+      # コードの既定値と backend/README.md の設定表がずれていないか（モデルは読み込まない）
+      - run: python scripts/check_docs.py
+      # 1MB を超えるファイルを入れていないか（docs/screenshots/ の下は許可）
+      # PR: 追加・変更されたファイルだけ。main への push: 差分の基準がないので、リポジトリ全体を見る
+      - name: 大きいファイルの検査
+        working-directory: .
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git diff --name-only --diff-filter=AM "origin/${{ github.base_ref }}...HEAD" | bash scripts/check_large_files.sh
+          else
+            git ls-files | bash scripts/check_large_files.sh
+          fi
