@@ -1,7 +1,7 @@
 import type {
   ApiErrorPayload,
   CapsuleDetail,
-  CapsuleSummary,
+  CapsuleListItem,
   ContentView,
   MemberView,
   OpenedContents,
@@ -70,7 +70,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export function listCapsules() {
-  return request<CapsuleSummary[]>('/capsules')
+  return request<CapsuleListItem[]>('/capsules')
 }
 
 export function getCapsule(capsuleId: string) {

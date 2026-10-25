@@ -10,6 +10,12 @@ export interface CapsuleSummary {
   role: CapsuleRole
 }
 
+/** 一覧の1件。key_photo_url は古いバックエンドだと無い */
+export interface CapsuleListItem extends CapsuleSummary {
+  key_photo_url?: string
+  url_expires_in?: number
+}
+
 export interface GuidePerson {
   position: number
   angles: Record<string, number | null>

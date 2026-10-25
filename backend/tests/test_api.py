@@ -109,6 +109,7 @@ def test_full_flow(env):
 
     listed = client.get("/capsules", headers=h).json()
     assert [c["capsule_id"] for c in listed] == [cid]
+    assert listed[0]["key_photo_url"]  # 一覧のサムネイル用
     detail = client.get(f"/capsules/{cid}", headers=h).json()
     assert detail["contents_count"] == 2
     assert "contents" not in detail  # 開封前に中身は返さない

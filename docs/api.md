@@ -128,7 +128,9 @@ await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
     "days_until_open": 3367,
     "status": "locked",          // locked | opened
     "people_count": 4,
-    "role": "owner"              // owner | member
+    "role": "owner",             // owner | member
+    "key_photo_url": "https://...",  // 一覧のサムネイル用。期限は url_expires_in 秒
+    "url_expires_in": 60
   }
 ]
 ```

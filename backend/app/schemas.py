@@ -55,6 +55,11 @@ class CapsuleSummary(BaseModel):
     role: Literal["owner", "member"]
 
 
+class CapsuleListItem(CapsuleSummary):
+    key_photo_url: str = Field(description="一覧のサムネイル用。鍵の写真の署名付きURL")
+    url_expires_in: int
+
+
 class CapsuleDetail(CapsuleSummary):
     key_photo_url: str
     preview_url: str | None = Field(description="鍵の写真に骨格を重ねたプレビュー")
