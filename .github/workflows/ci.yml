@@ -33,6 +33,46 @@ jobs:
       - run: pnpm test
       - run: pnpm build
 
+  # スマホ幅（375×667 / 390×844）で、主なボタンがスクロールなしで見えるか・axe の指摘がないかを確かめる（issue #22）。
+  # API はモックなので、バックエンドは要らない。スクショは artifact に残し、PR にリンクを貼る
+  e2e:
+    name: e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      pull-requests: write # PR にスクショのリンクをコメントするため
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm e2e
+      - name: スクショを保存
+        id: upload
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-screenshots
+          path: |
+            e2e-screenshots/
+            !e2e-screenshots/.results/
+          if-no-files-found: warn
+          retention-days: 14
+      - name: PR にスクショのリンクを貼る
+        # 同じリポジトリの PR のときだけ（fork の PR は書き込み権限がない）
+        if: ${{ !cancelled() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_URL: ${{ steps.upload.outputs.artifact-url }}
+        run: |
+          gh pr comment "${{ github.event.pull_request.number }}" --edit-last --create-if-none --body "スマホ幅の画面のスクショ（zip）: ${ARTIFACT_URL}
+          画面の幅ごとに \`w375/\`・\`w390/\` のフォルダに入っています（コミット ${GITHUB_SHA::7} の結果）。"
+
   backend:
     name: backend
     runs-on: ubuntu-latest
