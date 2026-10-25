@@ -15,6 +15,7 @@ from app.pose.detector import PoseExtractionError
 from app.repository import JsonItemStore, Repository
 from app.settings import Settings
 from app.storage import LocalStorage
+from app.routers.uploads import upload_prefix
 
 BASE = {
     "left_elbow": 90.0, "right_elbow": 170.0, "left_shoulder": 45.0,
@@ -71,10 +72,17 @@ def upload(client, purpose: str, user: str = "alice") -> str:
     res = client.post("/uploads", json={"purpose": purpose, "content_type": "image/png"}, headers={"X-User-Id": user})
     assert res.status_code == 200, res.text
     body = res.json()
-    assert body["s3_key"].startswith(f"uploads/{user}/{purpose}/")
+    assert body["s3_key"].startswith(upload_prefix(user, purpose))
     put = client.put(body["upload_url"], content=png(), headers=body["headers"])
     assert put.status_code == 200, put.text
     return body["s3_key"]
+
+
+def test_local_upload_escapes_development_user_id_on_windows(env):
+    client, _, _ = env
+    key = upload(client, "key", user="dev:owner-test@example.com")
+    assert key.startswith(upload_prefix("dev:owner-test@example.com", "key"))
+    assert ":" not in key and "@" not in key
 
 
 def create(client, open_date=TODAY, user="alice"):
@@ -156,6 +164,67 @@ def test_full_flow(env):
     more = upload(client, "content")
     assert client.post(f"/capsules/{cid}/contents", json={"type": "photo", "s3_key": more}, headers=h).status_code == 201
     assert len(client.get(f"/capsules/{cid}/contents", headers=u).json()["contents"]) == 2
+
+
+def test_create_with_optional_cover_and_initial_photos(env, tmp_path):
+    client, _, _ = env
+    key = upload(client, "key")
+    cover = upload(client, "cover")
+    initial = [upload(client, "content"), upload(client, "content")]
+    cover_path = tmp_path / "objects" / cover
+    content_paths = [tmp_path / "objects" / key for key in initial]
+
+    res = client.post(
+        "/capsules",
+        json={
+            "name": "夏合宿",
+            "key_photo_s3_key": key,
+            "cover_photo_s3_key": cover,
+            "initial_photo_s3_keys": initial,
+        },
+        headers={"X-User-Id": "alice"},
+    )
+    assert res.status_code == 201, res.text
+    capsule = res.json()
+    assert capsule["cover_photo_url"]
+    assert capsule["contents_count"] == 2
+    assert client.get(capsule["cover_photo_url"]).status_code == 200
+
+    listed = client.get("/capsules", headers={"X-User-Id": "alice"}).json()
+    assert listed[0]["cover_photo_url"]
+
+    unlocked = unlock(client, capsule["capsule_id"])
+    contents = client.get(f"/capsules/{capsule['capsule_id']}/contents", headers=unlocked).json()
+    assert len(contents["contents"]) == 2
+
+    assert client.delete(f"/capsules/{capsule['capsule_id']}", headers={"X-User-Id": "alice"}).status_code == 204
+    assert not cover_path.exists()
+    assert all(not path.exists() for path in content_paths)
+
+
+def test_create_without_cover_uses_plain_folder_cover(env):
+    client, _, _ = env
+    capsule = create(client).json()
+    assert capsule["cover_photo_url"] is None
+    listed = client.get("/capsules", headers={"X-User-Id": "alice"}).json()
+    assert listed[0]["cover_photo_url"] is None
+
+
+def test_initial_photos_are_limited_to_twenty(env):
+    client, _, _ = env
+    key = upload(client, "key")
+    content = upload(client, "content")
+    res = client.post(
+        "/capsules",
+        json={
+            "name": "多すぎる写真",
+            "key_photo_s3_key": key,
+            "initial_photo_s3_keys": [content] * 21,
+        },
+        headers={"X-User-Id": "alice"},
+    )
+    assert res.status_code == 422
+    assert res.json()["error"]["code"] == "validation_error"
 
 
 def unlock(client, cid, user="alice") -> dict:
@@ -425,7 +494,11 @@ def test_upload_not_found(env):
     client, _, _ = env
     res = client.post(
         "/capsules",
-        json={"name": "x", "open_date": TODAY.isoformat(), "key_photo_s3_key": "uploads/alice/key/missing.png"},
+        json={
+            "name": "x",
+            "open_date": TODAY.isoformat(),
+            "key_photo_s3_key": upload_prefix("alice", "key") + "missing.png",
+        },
         headers={"X-User-Id": "alice"},
     )
     assert res.status_code == 404
@@ -435,7 +508,7 @@ def test_upload_not_found(env):
 def test_tampered_upload_url_is_rejected(env):
     client, _, _ = env
     body = client.post("/uploads", json={"purpose": "key"}, headers={"X-User-Id": "alice"}).json()
-    tampered = body["upload_url"].replace("uploads/alice", "uploads/bob")
+    tampered = body["upload_url"].replace(upload_prefix("alice", "key"), upload_prefix("bob", "key"))
     assert client.put(tampered, content=png()).status_code == 403
 
 

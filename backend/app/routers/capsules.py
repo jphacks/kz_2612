@@ -80,6 +80,21 @@ def _parse_dt(value: str | None) -> dt.datetime | None:
     return dt.datetime.fromisoformat(value) if value else None
 
 
+def _validate_uploaded_object(
+    storage: Storage,
+    settings: Settings,
+    key: str,
+    prefix: str,
+) -> None:
+    if not key.startswith(prefix) or ".." in key:
+        raise ApiError(400, "invalid_s3_key", "この画像は使えないみたい。もう一度アップロードしてね")
+    size = storage.size(key)
+    if size is None:
+        raise ApiError(404, "upload_not_found", "画像が見つからなかったよ。アップロードが終わってから送ってね")
+    if size > settings.max_upload_bytes:
+        raise ApiError(413, "image_too_large", "画像が大きすぎるみたい。10MBまでにしてね")
+
+
 def _load_uploaded_image(
     storage: Storage,
     settings: Settings,
@@ -88,13 +103,7 @@ def _load_uploaded_image(
     *,
     delete_after_load: bool = False,
 ) -> Image.Image:
-    if not key.startswith(prefix) or ".." in key:
-        raise ApiError(400, "invalid_s3_key", "この画像は使えないみたい。もう一度アップロードしてね")
-    size = storage.size(key)
-    if size is None:
-        raise ApiError(404, "upload_not_found", "画像が見つからなかったよ。アップロードが終わってから送ってね")
-    if size > settings.max_upload_bytes:
-        raise ApiError(413, "image_too_large", "画像が大きすぎるみたい。10MBまでにしてね")
+    _validate_uploaded_object(storage, settings, key, prefix)
     data = storage.get_bytes(key)
     if delete_after_load:
         # 認証写真は判定用のメモリに読み込んだ直後に削除し、アルバムとして保存しない。
@@ -130,7 +139,12 @@ def _days_until(open_date: dt.date | None) -> int | None:
     return None if open_date is None else max(0, (open_date - _today_jst()).days)
 
 
-def _summary(capsule: dict, role: str) -> CapsuleSummary:
+def _summary(
+    capsule: dict,
+    role: str,
+    storage: Storage | None = None,
+    settings: Settings | None = None,
+) -> CapsuleSummary:
     open_date = _open_date(capsule)
     return CapsuleSummary(
         capsule_id=capsule["capsule_id"],
@@ -142,6 +156,11 @@ def _summary(capsule: dict, role: str) -> CapsuleSummary:
         role=role,
         # 写真は見せずに、ポーズの形（点の位置）だけを一覧に出す
         poses=[p.get("points", {}) for p in capsule["key_pose"]["people"]],
+        cover_photo_url=(
+            storage.presign_get(capsule["cover_photo_key"], settings.view_url_expires)
+            if storage and settings and capsule.get("cover_photo_key")
+            else None
+        ),
     )
 
 
@@ -173,7 +192,7 @@ def _detail(capsule: dict, role: str, repo: Repository, storage: Storage, settin
     expires = settings.view_url_expires
     locked_until = _locked_until(capsule, settings)
     return CapsuleDetail(
-        **_summary(capsule, role).model_dump(),
+        **_summary(capsule, role, storage, settings).model_dump(),
         key_photo_url=storage.presign_get(capsule["key_photo_key"], expires),
         preview_url=storage.presign_get(capsule["preview_key"], expires) if capsule.get("preview_key") else None,
         url_expires_in=expires,
@@ -206,6 +225,19 @@ def create_capsule(
     settings: Settings = Depends(settings_dep),
 ) -> CapsuleDetail:
     image = _load_uploaded_image(storage, settings, body.key_photo_s3_key, upload_prefix(user["user_id"], "key"))
+    if body.cover_photo_s3_key:
+        _load_uploaded_image(
+            storage,
+            settings,
+            body.cover_photo_s3_key,
+            upload_prefix(user["user_id"], "cover"),
+        )
+    if len(set(body.initial_photo_s3_keys)) != len(body.initial_photo_s3_keys):
+        raise ApiError(400, "duplicate_initial_photo", "同じ写真が複数選ばれているみたい。写真を選び直してね")
+    for photo_key in body.initial_photo_s3_keys:
+        # 最大20枚を一度に作るため、ここでは所有者・存在・容量だけを確認する。
+        # フロントでJPEG/PNG/WebPへ正規化済みで、個別追加時は従来どおり画像もデコードする。
+        _validate_uploaded_object(storage, settings, photo_key, upload_prefix(user["user_id"], "content"))
     try:
         people = detector.extract_key(image)
     except PoseExtractionError as e:
@@ -226,6 +258,7 @@ def create_capsule(
         "owner_id": user["user_id"],
         "open_date": body.open_date.isoformat() if body.open_date else None,
         "key_photo_key": body.key_photo_s3_key,
+        "cover_photo_key": body.cover_photo_s3_key,
         "preview_key": preview_key,
         # 鍵として保存するのは、点の位置・関節角度と、顔の特徴の数字（顔の画像は保存しない）
         "key_pose": {"version": 1, "people": [
@@ -239,18 +272,33 @@ def create_capsule(
     }
     repo.create_capsule(capsule)
     repo.add_member(capsule_id, user["user_id"], "owner", user.get("email"))
+    for photo_key in body.initial_photo_s3_keys:
+        repo.add_content({
+            "capsule_id": capsule_id,
+            "content_id": uuid.uuid4().hex[:12],
+            "type": "photo",
+            "s3_key": photo_key,
+            "author_id": user["user_id"],
+            "created_at": _now().isoformat(),
+        })
     log.info(json.dumps({"event": "capsule_created", "capsule_id": capsule_id, "people": len(people),
-                         "faces": sum(f is not None for f in faces)}))
+                         "faces": sum(f is not None for f in faces), "initial_photos": len(body.initial_photo_s3_keys),
+                         "has_cover": bool(body.cover_photo_s3_key)}))
     return _detail(capsule, "owner", repo, storage, settings)
 
 
 @router.get("", response_model=list[CapsuleSummary], summary="自分のカプセル一覧")
-def list_capsules(user: dict = Depends(current_user), repo: Repository = Depends(get_repository)):
+def list_capsules(
+    user: dict = Depends(current_user),
+    repo: Repository = Depends(get_repository),
+    storage: Storage = Depends(get_storage),
+    settings: Settings = Depends(settings_dep),
+):
     summaries = []
     for m in repo.list_memberships(user["user_id"]):
         capsule = repo.get_capsule(m["capsule_id"])
         if capsule:
-            summaries.append(_summary(capsule, m["role"]))
+            summaries.append(_summary(capsule, m["role"], storage, settings))
     # 開封日の近い順。開封日のないカプセルは後ろ
     return sorted(summaries, key=lambda s: (s.open_date is None, s.open_date or dt.date.max))
 
@@ -487,7 +535,7 @@ def delete_content(
 
 # フォルダを消すとき、アイテムのどの項目に画像（S3）のキーが入っているか
 _S3_KEY_FIELDS = {
-    "Capsule": ("key_photo_key", "preview_key"),
+    "Capsule": ("key_photo_key", "cover_photo_key", "preview_key"),
     "Content": ("s3_key",),
     # 旧バージョンが保存した認証写真も、フォルダ削除時には確実に消す。
     "OpenRecord": ("photo_key",),

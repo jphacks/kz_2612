@@ -10,6 +10,14 @@ export interface CapsuleSummary {
   role: CapsuleRole
   /** 鍵の写真の各人の体の点（左から順）。写真は見せずにポーズの形だけを出す用。古いバックエンドだと無い */
   poses?: Array<Record<string, [number, number] | null>>
+  cover_photo_url: string | null
+}
+
+export interface CreateCapsuleInput {
+  name: string
+  keyPhotoS3Key: string
+  coverPhotoS3Key?: string
+  initialPhotoS3Keys?: string[]
 }
 
 export interface GuidePerson {

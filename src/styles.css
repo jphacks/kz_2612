@@ -694,6 +694,14 @@ p {
   color: rgba(255, 255, 255, 0.93);
 }
 
+.folder-card__cover-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 .folder-card__cover .badge {
   position: absolute;
   bottom: 8px;
@@ -704,6 +712,7 @@ p {
   background: rgba(34, 27, 44, 0.46);
   font-size: 9px;
   backdrop-filter: blur(8px);
+  z-index: 2;
 }
 
 .folder-card__shine {
@@ -714,6 +723,7 @@ p {
   height: 100px;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.15);
+  z-index: 1;
 }
 
 .folder-card__body {
@@ -798,7 +808,7 @@ p {
 
 .progress-steps {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(7, 1fr);
   gap: 7px;
   margin: 0 4px 28px;
 }
@@ -1037,6 +1047,75 @@ p {
   font-size: 9px;
 }
 
+.photo-picker--cover {
+  min-height: 210px;
+}
+
+.initial-photo-picker {
+  display: flex;
+  min-height: 88px;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 5px;
+  border: 1.5px dashed #c8bdcf;
+  border-radius: 20px;
+  color: var(--accent);
+  background: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+}
+
+.initial-photo-picker input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.initial-photo-picker strong {
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.initial-photo-picker span {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.initial-photo-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.initial-photo-item {
+  position: relative;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: 13px;
+  background: var(--accent-soft);
+}
+
+.initial-photo-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.initial-photo-item button {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  background: rgba(30, 24, 36, 0.72);
+}
+
 .mock-key-photo {
   position: relative;
   width: 100%;
@@ -1195,6 +1274,16 @@ p {
   min-height: 132px;
   place-items: center;
   color: rgba(255, 255, 255, 0.86);
+}
+
+.summary-card__cover-preview {
+  background: linear-gradient(145deg, #9c78d8, #6744a7);
+}
+
+.summary-card__cover-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .summary-card__content {

@@ -41,7 +41,7 @@ await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
 // 3. 以降の API には up.s3_key を渡す
 ```
 
-- `purpose`: `key`（思い出の写真）／`attempt`（開封時の撮影）／`content`（中身の写真）。用途を間違えると `invalid_s3_key` になる
+- `purpose`: `key`（鍵写真）／`cover`（任意の表紙画像）／`attempt`（開封時の撮影）／`content`（中身の写真）。用途を間違えると `invalid_s3_key` になる
 - アップロードURLの期限は5分、上限10MB
 - **開封時の撮影画像は左右反転しないで送る**（`<video>` を鏡像表示していても、canvas に描くときは反転を戻す）
 
@@ -69,7 +69,7 @@ await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
 
 ```
 フォルダー一覧  GET /capsules
- ├ フォルダ新規作成 → 作成登録画面   POST /uploads(key) → POST /capsules → POST /capsules/{id}/invites
+ ├ フォルダ新規作成 → 作成登録画面   POST /uploads(key・任意のcover・0〜20枚のcontent) → POST /capsules → POST /capsules/{id}/invites
  └ フォルダ押下 → 写真認証画面       GET /capsules/{id}（guide でガイド表示）
      └ 写真を撮る                    POST /uploads(attempt) → POST /capsules/{id}/open
          ├ 失敗 → result.message を表示して撮り直し
@@ -77,7 +77,7 @@ await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
              ├ 一覧・1枚表示         GET /capsules/{id}/contents   （X-Unlock-Token）
              ├ 追加 → アップロード    POST /uploads(content) → POST /capsules/{id}/contents
              ├ 選択 → 削除           DELETE /capsules/{id}/contents/{content_id}（X-Unlock-Token）
-             └ 戻る → トークンを捨てる（次に入るときはまたポーズで解除）
+             └ 期限切れ・ログアウト・アカウント切替 → トークンを破棄
 ```
 | GET | `/health` | 死活確認 | — |
 | POST | `/warmup` | モデルを温める（発表直前に叩く） | — |
@@ -103,10 +103,17 @@ await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
 
 ```json
 // request
-{ "name": "成人式", "open_date": "2036-01-12", "key_photo_s3_key": "uploads/demo-user/key/3f2a....jpg" }
+{
+  "name": "成人式",
+  "open_date": "2036-01-12",
+  "key_photo_s3_key": "uploads/demo-user/key/3f2a....jpg",
+  "cover_photo_s3_key": "uploads/demo-user/cover/7a1b....jpg",
+  "initial_photo_s3_keys": ["uploads/demo-user/content/8c2d....jpg"]
+}
 ```
 
 `open_date` は省略できる（省略するといつでも開けられる。一覧・詳細では `open_date` と `days_until_open` が `null`）。
+`cover_photo_s3_key` は任意。省略時は鍵写真を流用せず通常のフォルダ表紙を表示する。`initial_photo_s3_keys` は作成時に入れる写真0〜20枚。
 
 201 で下の「カプセル詳細」を返す。`preview_url` が骨格を重ねたプレビュー画像。
 
@@ -131,7 +138,8 @@ await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
     "role": "owner",             // owner | member
     "poses": [                   // 鍵の写真の各人の体の点（左から順）。写真は出さず、ポーズの形だけを一覧で見せる用
       { "left_shoulder": [0.31, 0.42], "left_wrist": [0.22, 0.18], "left_knee": null }
-    ]
+    ],
+    "cover_photo_url": "https://..." // 表紙未設定なら null
   }
 ]
 ```
@@ -502,7 +510,7 @@ aws dynamodb create-table --table-name emo-timecapsule \
 ### S3
 
 - パブリックアクセスは**すべてブロック**。閲覧は署名付きURLのみ
-- キーの使い方: `uploads/{userId}/{key|attempt|content}/...`（ブラウザから PUT）、`previews/{capsuleId}.jpg`（Lambda が書き込む）
+- キーの使い方: `uploads/{userIdのハッシュ}/{key|cover|attempt|content}/...`（ブラウザから PUT）、`previews/{capsuleId}.jpg`（Lambda が書き込む）
 - ブラウザから直接 PUT / GET するので CORS 設定が必要:
 
 ```json

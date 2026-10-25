@@ -7,7 +7,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-UploadPurpose = Literal["key", "attempt", "content"]
+UploadPurpose = Literal["key", "cover", "attempt", "content"]
 ImageType = Literal["image/jpeg", "image/png", "image/webp"]
 
 
@@ -21,7 +21,9 @@ class ErrorResponse(BaseModel):
 
 
 class UploadRequest(BaseModel):
-    purpose: UploadPurpose = Field(description="key: 思い出の写真 / attempt: 開封時の撮影 / content: 中身の写真")
+    purpose: UploadPurpose = Field(
+        description="key: 鍵写真 / cover: 表紙画像 / attempt: 開封時の撮影 / content: 中身の写真"
+    )
     content_type: ImageType = "image/jpeg"
 
 
@@ -37,6 +39,12 @@ class CreateCapsuleRequest(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     open_date: dt.date | None = Field(default=None, description="開封日（日本時間）。省略するといつでも開けられる")
     key_photo_s3_key: str
+    cover_photo_s3_key: str | None = Field(default=None, description="任意の表紙画像。未設定なら通常のフォルダ表紙")
+    initial_photo_s3_keys: list[str] = Field(
+        default_factory=list,
+        max_length=20,
+        description="作成時にフォルダへ入れる写真（0〜20枚）",
+    )
 
 
 class GuidePerson(BaseModel):
@@ -58,6 +66,7 @@ class CapsuleSummary(BaseModel):
         default_factory=list,
         description="鍵の写真の各人の体の点（左から順、詳細の guide[].points と同じ）。一覧でポーズの形だけを見せる用",
     )
+    cover_photo_url: str | None = Field(default=None, description="任意の表紙画像。未設定なら null")
 
 
 class CapsuleDetail(CapsuleSummary):

@@ -120,7 +120,13 @@ export function InviteMembersPage() {
   return (
     <AppShell>
       <div className="screen screen--invite">
-        <PageHeader title="メンバーを招待" eyebrow="FOLDER CREATED" />
+        <PageHeader title="メンバーを招待" eyebrow="STEP 7 / 7" />
+
+        <div className="progress-steps" aria-label="作成の進み具合">
+          {[1, 2, 3, 4, 5, 6, 7].map((item) => (
+            <span className="is-active" key={item} />
+          ))}
+        </div>
 
         <div className="invite-hero">
           <span><Check size={28} /></span>
