@@ -129,8 +129,9 @@ await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
     "status": "locked",          // locked | opened
     "people_count": 4,
     "role": "owner",             // owner | member
-    "key_photo_url": "https://...",  // 一覧のサムネイル用。期限は url_expires_in 秒
-    "url_expires_in": 60
+    "poses": [                   // 鍵の写真の各人の体の点（左から順）。写真は出さず、ポーズの形だけを一覧で見せる用
+      { "left_shoulder": [0.31, 0.42], "left_wrist": [0.22, 0.18], "left_knee": null }
+    ]
   }
 ]
 ```

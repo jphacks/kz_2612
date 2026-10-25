@@ -38,7 +38,6 @@ from app.routers.uploads import upload_prefix
 from app.schemas import (
     AddContentRequest,
     CapsuleDetail,
-    CapsuleListItem,
     CapsuleSummary,
     ContentMeta,
     ContentView,
@@ -141,6 +140,8 @@ def _summary(capsule: dict, role: str) -> CapsuleSummary:
         status=capsule["status"],
         people_count=len(capsule["key_pose"]["people"]),
         role=role,
+        # 写真は見せずに、ポーズの形（点の位置）だけを一覧に出す
+        poses=[p.get("points", {}) for p in capsule["key_pose"]["people"]],
     )
 
 
@@ -243,26 +244,15 @@ def create_capsule(
     return _detail(capsule, "owner", repo, storage, settings)
 
 
-@router.get("", response_model=list[CapsuleListItem], summary="自分のカプセル一覧")
-def list_capsules(
-    user: dict = Depends(current_user),
-    repo: Repository = Depends(get_repository),
-    storage: Storage = Depends(get_storage),
-    settings: Settings = Depends(settings_dep),
-):
-    expires = settings.view_url_expires
-    items = []
+@router.get("", response_model=list[CapsuleSummary], summary="自分のカプセル一覧")
+def list_capsules(user: dict = Depends(current_user), repo: Repository = Depends(get_repository)):
+    summaries = []
     for m in repo.list_memberships(user["user_id"]):
         capsule = repo.get_capsule(m["capsule_id"])
         if capsule:
-            # 鍵の写真は詳細と同じくメンバーなら見られるので、一覧でもサムネイルに出す
-            items.append(CapsuleListItem(
-                **_summary(capsule, m["role"]).model_dump(),
-                key_photo_url=storage.presign_get(capsule["key_photo_key"], expires),
-                url_expires_in=expires,
-            ))
+            summaries.append(_summary(capsule, m["role"]))
     # 開封日の近い順。開封日のないカプセルは後ろ
-    return sorted(items, key=lambda s: (s.open_date is None, s.open_date or dt.date.max))
+    return sorted(summaries, key=lambda s: (s.open_date is None, s.open_date or dt.date.max))
 
 
 @router.get("/{capsule_id}", response_model=CapsuleDetail, responses=ERRORS, summary="カプセルの詳細（中身は含まない）")

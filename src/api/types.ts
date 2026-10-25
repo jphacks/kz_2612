@@ -8,12 +8,8 @@ export interface CapsuleSummary {
   status: 'locked' | 'opened'
   people_count: number
   role: CapsuleRole
-}
-
-/** 一覧の1件。key_photo_url は古いバックエンドだと無い */
-export interface CapsuleListItem extends CapsuleSummary {
-  key_photo_url?: string
-  url_expires_in?: number
+  /** 鍵の写真の各人の体の点（左から順）。写真は見せずにポーズの形だけを出す用。古いバックエンドだと無い */
+  poses?: Array<Record<string, [number, number] | null>>
 }
 
 export interface GuidePerson {
