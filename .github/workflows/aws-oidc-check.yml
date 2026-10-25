@@ -1,0 +1,32 @@
+name: AWS 接続の確認 (AWS connection check)
+
+# OIDC で AWS のロールを借りられるかを、手動で確かめるためのワークフロー（issue #19）。
+# Actions タブ → 「AWS 接続の確認」→ Run workflow で、ブランチと確かめるロールを選んで実行する。
+on:
+  workflow_dispatch:
+    inputs:
+      role:
+        description: 確かめるロール
+        type: choice
+        options: [deploy, regression]
+
+permissions:
+  id-token: write # GitHub に OIDC の証明書（トークン）を発行してもらうのに必要
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ inputs.role == 'deploy' && vars.AWS_DEPLOY_ROLE_ARN || vars.AWS_REGRESSION_ROLE_ARN }}
+          aws-region: ap-northeast-1
+      # 今どのロールで動いているかを表示する
+      - run: aws sts get-caller-identity --query Arn --output text
+      # 写真用ロールは、写真の中身や名前をログに出さずに「読めるか」だけを確かめる
+      - if: inputs.role == 'regression'
+        run: |
+          count=$(aws s3api list-objects-v2 --bucket "${{ vars.REGRESSION_BUCKET }}" --prefix cases/ --query 'length(Contents || `[]`)' --output text)
+          echo "cases/ の下のファイル数: $count"

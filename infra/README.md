@@ -48,6 +48,10 @@ aws lambda add-permission --function-name emo-api --statement-id apigw-invoke --
 - CORS は FastAPI が返すので、API Gateway 側では**設定しない**（`docs/api.md`）
 - 手元でコンテナだけ確かめたいとき：`docker run --rm -p 9000:8080 emo-api` → 別窓で `curl -X POST http://localhost:9000/2015-03-31/functions/function/invocations -d @infra/event-health.json`
 
+## GitHub Actions から AWS を使う
+
+自動デプロイと回帰テストのために、GitHub Actions が鍵なし（OIDC）で AWS を使えるようにする。手順は [github-oidc.md](github-oidc.md)。
+
 ## コードを変えたら
 
 ```bat
