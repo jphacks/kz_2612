@@ -179,11 +179,24 @@ export function PhotoWithPose({
   className?: string
 }) {
   const [size, setSize] = useState<[number, number] | null>(null)
+  const [failed, setFailed] = useState(false)
   const [w, h] = size ?? [1, 1]
   const r = w / 100
 
   let lineIndex = 0
   let starIndex = 0
+
+  // 写真が読めないとき（期限切れ・消えた画像など）は、ファインダーにポーズの線だけを出す
+  if (failed) {
+    return (
+      <figure className={'pose-photo pose-photo--missing' + (className ? ' ' + className : '')}>
+        <span className="real-post__frame" role="img" aria-label={alt}>
+          <span className="real-post__corners" />
+          <Constellation poses={poses} draw={false} className="real-post__pose" />
+        </span>
+      </figure>
+    )
+  }
 
   return (
     <figure className={'pose-photo' + (className ? ' ' + className : '')}>
@@ -191,6 +204,7 @@ export function PhotoWithPose({
         src={src}
         alt={alt}
         onLoad={(event) => setSize([event.currentTarget.naturalWidth, event.currentTarget.naturalHeight])}
+        onError={() => setFailed(true)}
       />
       {size && (
         <svg className="pose-photo__lines constellation--draw" viewBox={'0 0 ' + w + ' ' + h} aria-hidden="true">

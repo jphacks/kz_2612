@@ -23,6 +23,7 @@ import {
 } from '../api/client'
 import type { CapsuleDetail, MemberView, OpenedContents } from '../api/types'
 import { AppShell, PageHeader } from '../components/AppShell'
+import { DateStamp } from '../components/Decor'
 import { Badge, Button, Card, EmptyState } from '../components/Ui'
 import { normalizeImage } from '../lib/images'
 import {
@@ -231,7 +232,7 @@ export function GalleryPage() {
                     </span>
                   )}
                 </span>
-                <span className="album-photo__date">{formatDate(photo.created_at)}</span>
+                <DateStamp date={photo.created_at} className="album-photo__date" />
               </>
             )
 
@@ -242,12 +243,17 @@ export function GalleryPage() {
                     className={'album-photo' + (isSelected ? ' is-selected' : '')}
                     type="button"
                     aria-pressed={isSelected}
+                    aria-label={'思い出の写真 ' + formatDate(photo.created_at)}
                     onClick={() => togglePhoto(photo.content_id)}
                   >
                     {content}
                   </button>
                 ) : (
-                  <Link className="album-photo" to={folderPath(folderId, '/photos/' + photo.content_id)}>
+                  <Link
+                    className="album-photo"
+                    aria-label={'思い出の写真 ' + formatDate(photo.created_at)}
+                    to={folderPath(folderId, '/photos/' + photo.content_id)}
+                  >
                     {content}
                   </Link>
                 )}
@@ -321,7 +327,10 @@ export function PhotoDetailPage() {
 
         {/* 1枚を大きなポラロイドにして、机の上に置いたように見せる */}
         <figure className="photo-view__polaroid" key={photo.content_id}>
-          <img src={photo.url ?? ''} alt="保存された思い出" onError={() => void reload()} />
+          <span className="photo-view__image">
+            <img src={photo.url ?? ''} alt="保存された思い出" onError={() => void reload()} />
+            <DateStamp date={photo.created_at} />
+          </span>
           <figcaption>
             <span>思い出の写真</span>
             <time dateTime={photo.created_at}>{formatDate(photo.created_at)}</time>
@@ -401,7 +410,7 @@ export function UploadPage() {
         <PageHeader title="写真を追加" backTo={folderPath(folderId, '/photos')} />
 
         <div className="paper-upload__copy">
-          <h1>思い出を、アルバムに貼ろう</h1>
+          <h1>思い出を、フォルダに入れよう</h1>
           <p>一度に10枚、フォルダ全体で20枚まで追加できます。いまは {currentCount} / 20枚。</p>
         </div>
 
@@ -423,7 +432,7 @@ export function UploadPage() {
         {files.length > 0 && (
           <section className="paper-upload__queue" aria-label="追加する写真">
             <p>
-              <strong>{files.length}枚</strong>を貼ります
+              <strong>{files.length}枚</strong>を追加します
               <span>追加後 {currentCount + files.length} / 20枚</span>
             </p>
             <ul>

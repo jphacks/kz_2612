@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
-import { ArrowDown, ArrowRight } from 'lucide-react'
+import { ArrowDown, ArrowRight, LockKeyhole, RotateCcw } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { Twinkles } from '../components/Decor'
 import '../landing.css'
 
 /*
@@ -229,9 +230,66 @@ function Section({ id, className, sticky, children, label }: {
   )
 }
 
+type OpenStage = 'tap' | 'open' | 'flash' | 'reveal'
+
+function prefersReducedMotion() {
+  return typeof window !== 'undefined' && Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)
+}
+
+/**
+ * 開封の演出の見本。ぼやけたあの日の写真をタップ → 鍵が外れてふるえる → 白く光る
+ * → はっきり見え、今日の写真が左上に重なる。写真は SVG の絵なので読み込みに失敗しない。
+ */
+function OpenDemo() {
+  const [stage, setStage] = useState<OpenStage>('tap')
+  const timers = useRef<number[]>([])
+
+  useEffect(() => () => timers.current.forEach((id) => window.clearTimeout(id)), [])
+
+  const open = () => {
+    if (prefersReducedMotion()) {
+      setStage('reveal')
+      return
+    }
+    setStage('open')
+    timers.current = [
+      window.setTimeout(() => setStage('flash'), 800),
+      window.setTimeout(() => setStage('reveal'), 1150),
+    ]
+  }
+
+  return (
+    <div className={'syt-open syt-open--' + stage}>
+      <div className="syt-open__card" onClick={stage === 'tap' ? open : undefined}>
+        <svg className="syt-open__photo" viewBox="0 0 100 82" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+          <SceneArt scene="beach" />
+        </svg>
+        <span className="syt-open__label syt-open__label--then">あの日</span>
+        <span className="syt-open__lock" aria-hidden="true"><LockKeyhole size={24} /></span>
+        <span className="syt-open__inset" aria-hidden="true">
+          <svg viewBox="0 0 100 82" preserveAspectRatio="xMidYMid slice"><SceneArt scene="station" /></svg>
+          <span className="syt-open__label">今日</span>
+        </span>
+        {stage === 'reveal' && <Twinkles count={6} />}
+        <span className="syt-open__flash" aria-hidden="true" />
+      </div>
+
+      {stage === 'reveal' ? (
+        <button className="syt-open__button" type="button" onClick={() => setStage('tap')}>
+          <RotateCcw size={15} aria-hidden="true" />もう一度
+        </button>
+      ) : (
+        <button className="syt-open__button" type="button" onClick={open} disabled={stage !== 'tap'}>
+          タップしてひらく
+        </button>
+      )}
+      <p className="syt-sr" aria-live="polite">{stage === 'reveal' ? 'あの日の写真がひらきました' : ''}</p>
+    </div>
+  )
+}
+
 export function LandingPage() {
   const heroRef = useRef<HTMLElement>(null)
-  const [letterOpen, setLetterOpen] = useState(false)
 
   useSceneProgress()
   useReveal()
@@ -280,6 +338,7 @@ export function LandingPage() {
           aria-labelledby="syt-title"
         >
           <div className="syt-hero__photos" aria-hidden="true">
+            <Twinkles count={6} />
             {HERO_PHOTOS.map((photo, i) => (
               <div
                 key={photo.scene}
@@ -339,38 +398,14 @@ export function LandingPage() {
           </div>
         </Section>
 
-        {/* 3. 未来への手紙 */}
-        <Section id="syt-letter" className="syt-letter-scene" label="未来への手紙">
-          <div className="syt-letter-scene__copy syt-reveal">
+        {/* 3. ひらく瞬間（アプリの開封の演出と同じ流れを、ここで試せる） */}
+        <Section id="syt-open" className="syt-open-scene" label="ひらく瞬間">
+          <div className="syt-open-scene__copy syt-reveal">
             <p className="syt-chapter">Chapter 2</p>
-            <h2>未来への、手紙。</h2>
-            <p>写真と一緒に、いまの言葉もしまっておけます。</p>
+            <h2>そろったら、ひらく。</h2>
+            <p>ぼやけた写真は、あの日のメンバーが同じポーズでそろったときだけ、はっきり見えます。</p>
           </div>
-
-          <div className={'syt-envelope' + (letterOpen ? ' is-open' : '')}>
-            <span className="syt-envelope__back" aria-hidden="true" />
-            <div className="syt-envelope__paper" id="syt-letter-body">
-              <p className="syt-envelope__to">10年後のみんなへ</p>
-              <p className="syt-envelope__text">
-                元気にしてる？ あの日の屋上、まだ覚えてるかな。
-                このカプセルは、みんながそろわないと開かないんだって。
-                だから、また集まろう。
-              </p>
-              <p className="syt-envelope__from">— 2026年 夏</p>
-            </div>
-            <span className="syt-envelope__front" aria-hidden="true" />
-            <span className="syt-envelope__flap" aria-hidden="true" />
-            <span className="syt-envelope__seal" aria-hidden="true">E</span>
-            <button
-              type="button"
-              className="syt-envelope__button"
-              aria-expanded={letterOpen}
-              aria-controls="syt-letter-body"
-              onClick={() => setLetterOpen((open) => !open)}
-            >
-              <span>{letterOpen ? '手紙をとじる' : 'タップして手紙をひらく'}</span>
-            </button>
-          </div>
+          <OpenDemo />
         </Section>
 
         {/* 4. 再会 */}

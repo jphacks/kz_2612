@@ -16,11 +16,13 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { getCapsule, openCapsule, uploadImage } from '../api/client'
 import type { CapsuleDetail, FacePersonResult } from '../api/types'
 import { AppShell, PageHeader } from '../components/AppShell'
-import { GiftReveal } from '../components/Celebration'
+import { PhotoReveal } from '../components/Celebration'
+import { Twinkles } from '../components/Decor'
 import { PhotoWithPose } from '../components/Constellation'
 import { PoseOverlay } from '../components/PoseOverlay'
 import { Badge, Button, Card } from '../components/Ui'
 import { usePoseGuide } from '../hooks/usePoseGuide'
+import { rememberCapture, getRememberedCapture } from '../lib/capturePreview'
 import { captureVideoFrame } from '../lib/images'
 import { getPoseGuideFeedback } from '../lib/poseGuide'
 import {
@@ -95,7 +97,7 @@ export function UnlockPage() {
           ) : (
             <div className="lux-unlock__placeholder" aria-hidden="true" />
           )}
-          <span className="lux-unlock__tag"><LockKeyhole size={13} />鍵の写真</span>
+          <Twinkles count={3} />
         </div>
 
         <div className="lux-unlock__copy">
@@ -260,6 +262,7 @@ export function CameraPage() {
     setError('')
     try {
       const image = await captureVideoFrame(videoRef.current)
+      rememberCapture(folderId, image)
       const s3Key = await uploadImage(image, 'attempt')
       const response = await openCapsule(folderId, s3Key)
       saveAuthResult(folderId, response)
@@ -469,6 +472,7 @@ export function ResultPage() {
         score={result.result.score}
         message={result.result.message}
         thenPhotoUrl={result.opened.key_photo_url}
+        nowPhotoUrl={getRememberedCapture(folderId)}
         faces={faceResults}
       />
     )
@@ -531,12 +535,14 @@ function SuccessResult({
   score,
   message,
   thenPhotoUrl,
+  nowPhotoUrl,
   faces,
 }: {
   folderId: string | undefined
   score: number
   message: string
   thenPhotoUrl: string
+  nowPhotoUrl?: string
   faces: FacePersonResult[]
 }) {
   const navigate = useNavigate()
@@ -546,9 +552,9 @@ function SuccessResult({
   return (
     <AppShell>
       <div className="screen screen--result">
-        <GiftReveal thenPhotoUrl={thenPhotoUrl} onDone={handleDone} />
+        <PhotoReveal thenPhotoUrl={thenPhotoUrl} nowPhotoUrl={nowPhotoUrl} onDone={handleDone} />
 
-        <div className={'nt-after' + (revealed ? ' is-visible' : '')} aria-hidden={!revealed}>
+        <div className={'rv-after' + (revealed ? ' is-visible' : '')} aria-hidden={!revealed}>
           <div className="result-heading">
             <Badge tone="success">MATCH!</Badge>
             <h1>あの日が、ひらきました</h1>

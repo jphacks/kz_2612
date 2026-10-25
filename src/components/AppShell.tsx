@@ -13,7 +13,6 @@ export function AppShell({
 }>) {
   return (
     <div className={classNames('app-frame', fullBleed && 'app-frame--full-bleed')}>
-      {!fullBleed && <div className="paper-grain" aria-hidden="true" />}
       <main className="app-content">{children}</main>
       {showNavigation && <BottomNavigation />}
     </div>

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { AppShell } from '../components/AppShell'
 import { Constellation, seededPoses } from '../components/Constellation'
+import { Twinkles } from '../components/Decor'
 import { Button } from '../components/Ui'
 import {
   defaultDevelopmentEmail,
@@ -14,7 +15,6 @@ import {
   isCognitoConfigured,
 } from '../lib/auth'
 
-const STAR = 'M12 0C13 8 16 11 24 12C16 13 13 16 12 24C11 16 8 13 0 12C8 11 11 8 12 0Z'
 // ログイン画面の見本のポーズ（毎回同じ形）
 const SAMPLE_POSES = seededPoses('pose-to-open', 3)
 
@@ -63,22 +63,19 @@ export function LoginPage() {
   return (
     <AppShell>
       <div className="login-page lux-login">
-        <header className="lux-brand">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d={STAR} /></svg>
-          <span>Webタイムカプセル</span>
-        </header>
+        <header className="lux-brand">Webタイムカプセル.</header>
 
         <h1 className="lux-login__title">
           あの日の写真のポーズで、<br />みんなのフォルダが開く。
         </h1>
 
+        {/* ファインダーの中に、あの日のポーズの線（フォルダ一覧と同じ見せ方） */}
         <div className="lux-login__hero" aria-hidden="true">
-          <span className="lux-orbit" />
-          <span className="lux-orbit lux-orbit--inner" />
-          <div className="lux-polaroid">
-            <Constellation poses={SAMPLE_POSES} className="lux-polaroid__pose" />
-            <span>あの日の写真</span>
-          </div>
+          <span className="real-post__frame">
+            <span className="real-post__corners" />
+            <Constellation poses={SAMPLE_POSES} className="real-post__pose" />
+            <Twinkles count={4} />
+          </span>
         </div>
 
         <p className="lux-lead">

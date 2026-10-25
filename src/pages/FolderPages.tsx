@@ -6,7 +6,6 @@ import {
   FolderHeart,
   ImagePlus,
   LoaderCircle,
-  LockKeyhole,
   LockKeyholeOpen,
   Plus,
   RefreshCw,
@@ -17,8 +16,10 @@ import {
 } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import { createCapsule, listCapsules, uploadImage } from '../api/client'
-import type { CapsuleListItem } from '../api/types'
+import type { CapsuleSummary } from '../api/types'
 import { AppShell, PageHeader } from '../components/AppShell'
+import { Constellation } from '../components/Constellation'
+import { Twinkles } from '../components/Decor'
 import { Badge, Button, Card, EmptyState } from '../components/Ui'
 import { normalizeImage } from '../lib/images'
 import { getUnlockSession } from '../lib/unlockSession'
@@ -29,7 +30,7 @@ function errorMessage(error: unknown) {
 
 
 export function FolderListPage() {
-  const [folders, setFolders] = useState<CapsuleListItem[]>([])
+  const [folders, setFolders] = useState<CapsuleSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [reloadKey, setReloadKey] = useState(0)
@@ -53,26 +54,20 @@ export function FolderListPage() {
 
   return (
     <AppShell showNavigation>
-      <div className="screen screen--folders lux-home">
-        <header className="lux-home__header">
+      <div className="screen screen--folders real-feed">
+        {/* BeReal のような上のバー: 左に新規作成、真ん中にタイトル、右にアカウント */}
+        <header className="real-topbar">
+          <Link className="real-icon-button" to="/folders/new" aria-label="新しいフォルダをつくる">
+            <Plus size={20} />
+          </Link>
           <h1>思い出フォルダ</h1>
-          <p className="lux-count">
-            <strong>{folders.length}</strong>個
-          </p>
-          <Link className="lux-account" to="/account" aria-label="アカウント">
-            <UserRound size={18} />
+          <Link className="real-icon-button" to="/account" aria-label="アカウント">
+            <UserRound size={19} />
           </Link>
         </header>
-        <p className="lux-home__lead">写真のポーズをみんなで再現すると、フォルダが開きます。</p>
-
-        <Link className="lux-create" to="/folders/new">
-          <span className="lux-create__plus"><Plus size={18} /></span>
-          <span>
-            <strong>新しいフォルダをつくる</strong>
-            <small>鍵になる写真を1枚選んではじめよう</small>
-          </span>
-          <ArrowRight size={18} />
-        </Link>
+        <p className="real-feed__lead">
+          <strong>{folders.length}</strong>個のフォルダ
+        </p>
 
         {loading && (
           <div className="api-state" role="status">
@@ -99,41 +94,44 @@ export function FolderListPage() {
           />
         )}
 
-        <ul className="lux-folders">
+        <ul className="real-posts">
           {folders.map((folder, index) => {
             const isUnlocked = Boolean(getUnlockSession(folder.capsule_id))
             const destination = isUnlocked
               ? '/folders/' + folder.capsule_id + '/photos'
               : '/folders/' + folder.capsule_id + '/unlock'
+            const hasPose = folder.poses?.some((pose) => Object.values(pose).some(Boolean))
 
             return (
               <li key={folder.capsule_id} style={{ '--i': index } as CSSProperties}>
-                <Link className={'lux-folder' + (isUnlocked ? ' is-open' : '')} to={destination}>
-                  <span className="lux-folder__photo">
-                    {/* 写真が読めないときは、下のアイコンが見える */}
-                    <FolderHeart size={26} aria-hidden="true" />
-                    {folder.key_photo_url && (
-                      <img
-                        src={folder.key_photo_url}
-                        alt=""
-                        onError={(event) => { event.currentTarget.style.display = 'none' }}
-                      />
-                    )}
-                    <span className="lux-folder__state">
-                      {isUnlocked ? <LockKeyholeOpen size={13} /> : <LockKeyhole size={13} />}
-                      {isUnlocked ? '開いています' : '鍵がかかっています'}
+                <Link className={'real-post' + (isUnlocked ? ' is-open' : '')} to={destination}>
+                  <span className="real-post__head">
+                    <span className="real-avatar" aria-hidden="true"><Users size={16} /></span>
+                    <span className="real-post__title">
+                      <strong>{folder.name}</strong>
+                      <small>
+                        {folder.people_count}人
+                        <span aria-hidden="true">・</span>
+                        {folder.role === 'owner' ? '作成者' : '参加中'}
+                      </small>
                     </span>
+                    <ArrowRight className="real-post__arrow" size={18} aria-hidden="true" />
                   </span>
-                  <span className="lux-folder__body">
-                    <strong>{folder.name}</strong>
-                    <small>
-                      <Users size={13} aria-hidden="true" />
-                      {folder.people_count}人のポーズで開く
-                      <span aria-hidden="true">・</span>
-                      {folder.role === 'owner' ? '作成者' : '参加中'}
-                    </small>
+
+                  {/* 写真は見せず、ファインダーの中にあの日のポーズを白い線だけで出す */}
+                  <span className="real-post__frame" aria-hidden="true">
+                    <span className="real-post__corners" />
+                    {hasPose
+                      ? <Constellation poses={folder.poses!} draw={false} className="real-post__pose" />
+                      : <FolderHeart className="real-post__placeholder" size={32} />}
+                    <Twinkles count={3} />
                   </span>
-                  <ArrowRight className="lux-folder__arrow" size={18} aria-hidden="true" />
+
+                  {isUnlocked && (
+                    <span className="real-post__state is-open">
+                      <LockKeyholeOpen size={14} />開いています
+                    </span>
+                  )}
                 </Link>
               </li>
             )
