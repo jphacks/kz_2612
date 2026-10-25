@@ -1,7 +1,10 @@
 {
   "CORSRules": [
     {
-      "AllowedOrigins": ["http://localhost:5173"],
+      "AllowedOrigins": [
+        "http://localhost:5173",
+      "https://production.d2vpdsvyjkeeij.amplifyapp.com"
+    ],
       "AllowedMethods": ["PUT", "GET"],
       "AllowedHeaders": ["Content-Type"],
       "MaxAgeSeconds": 3000
