@@ -212,7 +212,7 @@ await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
     "people": [
       {
         "position": 1, "ok": false,
-        "mean_point_diff": 0.41,       // 点の位置のずれの平均（肩幅を1）。0.35 以内なら一致
+        "mean_point_diff": 0.41,       // 点の位置のずれの平均（肩幅を1）。0.5 以内なら一致
         "points": {                    // 点ごとのずれ。ok で色分けする
           "right_wrist": { "key": [-0.9, -0.2], "attempt": [-0.9, 0.6], "diff": 0.8, "ok": false },
           "right_elbow": { "key": [-0.8, 0.6], "attempt": [-0.85, 0.65], "diff": 0.07, "ok": true }
@@ -257,7 +257,7 @@ await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
 
 - **点の位置で比べる**: ひじ・手首・ひざ・足首が、両肩の中心から見てどこにあるか（肩幅を1とした座標、y は下向きが正）。カメラとの距離が違っても比べられる
 - 当時の写真で写っていない点は比べない（片手を隠した自由なポーズでも開けられる）
-- 当時は写っていたのに今は隠れている点は、1人2点まで許す（少しずれた扱いで、スコアが下がる）。3点以上隠れると `reason: "body_not_visible"` と `missing_joints` を返す
+- 当時は写っていたのに今は隠れている点は、1人3点まで許す（少しずれた扱いで、スコアが下がる）。4点以上隠れると `reason: "body_not_visible"` と `missing_joints` を返す
 - 点の名前: `left_elbow` `right_elbow` `left_wrist` `right_wrist` `left_knee` `right_knee` `left_ankle` `right_ankle`（左右は写っている本人から見た左右）
 - 関節の角度（`joints`）は表示用。ひじを曲げたポーズでは少し動くだけで角度が大きく変わるので、合否には使わない
 
@@ -271,7 +271,7 @@ await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
 ```
 
 - 立ち位置ごとに、**鍵の写真の顔と、これまで開けたときの顔（顔の記憶）**のうち、いちばん似ている顔と比べる。`similarity` は −1〜1
-- `similarity` が 0.40 以上、かつ、ほかの立ち位置の人の記憶（`others`）より 0.05 以上似ていれば `ok`
+- `similarity` が 0.32 以上、かつ、ほかの立ち位置の人の記憶（`others`）より 0.02 以上似ていれば `ok`
 - 顔が見えない人がいると `reason: "face_not_visible"`、本人と確かめられない人がいると `reason: "face_mismatch"`（`message` に声かけが入る）
 - `checked: false` は、鍵の写真でその人の顔が見えず、まだ記憶がない人（判定しない。開けたときの顔から覚える）
 - 開けるのに成功すると、そのときの顔が記憶に加わる（年月で顔が変わってもついていける）
@@ -457,11 +457,12 @@ docker run --rm -p 9000:8080 -e EMO_BUCKET=... -e EMO_TABLE=... -e AWS_REGION=ap
 | `EMO_IGNORE_OPEN_DATE` | | `false` | デモ時は `true` で開封日前でも開けられる |
 | `EMO_INVITE_DAYS` | | `14` | 招待リンクの有効期限（日） |
 | `EMO_UNLOCK_MINUTES` | | `720` | ポーズで解除してからライブラリを使える時間（分）。既定は最大12時間 |
-| `EMO_POINT_TOLERANCE` | | `0.35` | 点の位置のずれの許容値（肩幅を1） |
-| `EMO_MAX_MISSING_POINTS` | | `2` | 開けるとき、当時写っていた点が何点まで隠れてよいか |
+| `EMO_POINT_TOLERANCE` | | `0.5` | 点の位置のずれの許容値（肩幅を1） |
+| `EMO_MAX_MISSING_POINTS` | | `3` | 開けるとき、当時写っていた点が何点まで隠れてよいか |
 | `EMO_FACE_CHECK` | | `true` | 顔の判定をするか |
-| `EMO_FACE_THRESHOLD` / `EMO_FACE_MARGIN` | | `0.40` / `0.05` | 顔の類似度のしきい値と、ほかの人との差 |
-| `EMO_MAX_HIDDEN_FACES` | | `0` | 顔が見えなくてもよい人数 |
+| `EMO_FACE_THRESHOLD` / `EMO_FACE_MARGIN` | | `0.32` / `0.02` | 顔の類似度のしきい値と、ほかの人との差 |
+| `EMO_MAX_HIDDEN_FACES` | | `1` | 顔が見えなくてもよい人数 |
+| `EMO_MIN_PERSON_RATIO` | | `0.4` | いちばん大きく写っている人と比べて、肩幅がこの割合より小さい人（背景の奥の人）は数えない |
 | `EMO_FACE_MEMORY` | | `5` | 開けたときの顔を1人何件まで覚えるか |
 | `EMO_MAX_FAILURES` / `EMO_LOCK_MINUTES` | | `0` / `10` | 何回失敗したら何分ロックするか。0 はロックしない |
 | `EMO_DETECTION_CONFIDENCE` | | `0.2` | 人物検出のしきい値 |

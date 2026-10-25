@@ -105,7 +105,7 @@ def test_mirror_only_when_enabled():
         left_shoulder=BASE["right_shoulder"], right_shoulder=BASE["left_shoulder"],
         left_knee=BASE["right_knee"], right_knee=BASE["left_knee"],
     )]
-    assert not match_poses(key, flipped).ok
+    assert not match_poses(key, flipped, MatchConfig(allow_mirror=False)).ok
     result = match_poses(key, flipped, MatchConfig(allow_mirror=True))
     assert result.ok and result.mirrored
 
