@@ -204,7 +204,7 @@ await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
   "result": {
     "ok": false,
     "reason": "pose_mismatch",      // count_mismatch | pose_mismatch | body_not_visible | no_person | face_not_visible | face_mismatch | null
-    "score": 62,                    // 一致度ゲージ 0〜100。許容値ちょうどで70
+    "score": 52,                    // 一致度ゲージ 0〜100。許容値ちょうどで70。EMO_PASS_SCORE（既定55）以上でポーズ一致
     "message": "あと少し！右の人の右手をもう少し上に",   // そのまま表示してよい
     "expected_people": 2,
     "detected_people": 2,
@@ -212,7 +212,7 @@ await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
     "people": [
       {
         "position": 1, "ok": false,
-        "mean_point_diff": 0.41,       // 点の位置のずれの平均（肩幅を1）。0.5 以内なら一致
+        "mean_point_diff": 0.41,       // 点の位置のずれの平均（肩幅を1）。合否は全員から出す score で決める
         "points": {                    // 点ごとのずれ。ok で色分けする
           "right_wrist": { "key": [-0.9, -0.2], "attempt": [-0.9, 0.6], "diff": 0.8, "ok": false },
           "right_elbow": { "key": [-0.8, 0.6], "attempt": [-0.85, 0.65], "diff": 0.07, "ok": true }
@@ -457,7 +457,8 @@ docker run --rm -p 9000:8080 -e EMO_BUCKET=... -e EMO_TABLE=... -e AWS_REGION=ap
 | `EMO_IGNORE_OPEN_DATE` | | `false` | デモ時は `true` で開封日前でも開けられる |
 | `EMO_INVITE_DAYS` | | `14` | 招待リンクの有効期限（日） |
 | `EMO_UNLOCK_MINUTES` | | `720` | ポーズで解除してからライブラリを使える時間（分）。既定は最大12時間 |
-| `EMO_POINT_TOLERANCE` | | `0.5` | 点の位置のずれの許容値（肩幅を1） |
+| `EMO_PASS_SCORE` | | `55` | ポーズの合否。一致度（score）がこれ以上なら一致 |
+| `EMO_POINT_TOLERANCE` | | `0.5` | 一致度の物差し（平均のずれがこれちょうどで一致度70。肩幅を1） |
 | `EMO_MAX_MISSING_POINTS` | | `3` | 開けるとき、当時写っていた点が何点まで隠れてよいか |
 | `EMO_FACE_CHECK` | | `true` | 顔の判定をするか |
 | `EMO_FACE_THRESHOLD` / `EMO_FACE_MARGIN` | | `0.32` / `0.02` | 顔の類似度のしきい値と、ほかの人との差 |

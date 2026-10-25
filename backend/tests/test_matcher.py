@@ -73,9 +73,10 @@ def test_no_person():
 
 
 def test_pose_mismatch_points_to_worst_joint():
-    attempt = [person(0.3), person(0.7, right_elbow=60.0, left_shoulder=10.0)]
+    attempt = [person(0.3), person(0.7, right_elbow=30.0, left_shoulder=160.0, right_shoulder=30.0, left_knee=90.0)]
     result = match_poses([person(0.3), person(0.7)], attempt)
     assert not result.ok
+    assert result.score < 55
     assert result.reason == "pose_mismatch"
     assert result.people[0].ok and not result.people[1].ok
     assert result.people[1].joints["right_elbow"].ok is False
@@ -83,10 +84,28 @@ def test_pose_mismatch_points_to_worst_joint():
     assert "伸ばして" in result.message
 
 
-def test_one_joint_far_off_fails_even_if_mean_ok():
-    # 平均は許容内でも、1関節だけ大きく外れたら失敗
-    result = match_poses([person(0.5)], [person(0.5, right_shoulder=60.0)])
-    assert not result.ok
+def test_score_decides_even_if_one_person_is_off():
+    # 以前は一致度70%以上でも、1人が許容値を超えると開かなかった。いまは一致度で決める
+    attempt = [person(0.3), person(0.7, right_elbow=60.0, left_shoulder=10.0)]
+    result = match_poses([person(0.3), person(0.7)], attempt)
+    assert not result.people[1].ok
+    assert result.score >= 70
+    assert result.ok
+
+
+def test_score_decides_even_if_one_point_is_far_off():
+    # 以前は平均が許容内でも、1点だけ大きく外れると開かなかった
+    result = match_poses([rperson(0.5)], [rperson(0.5, right_wrist=[-0.9, 1.6])])
+    assert result.people[0].points["right_wrist"].diff > MatchConfig().max_point_diff
+    assert result.score >= 55
+    assert result.ok
+
+
+def test_pass_score_threshold():
+    attempt = [rperson(0.5, right_wrist=[-0.9, 1.6], right_elbow=[-0.9, 0.9])]
+    score = match_poses([rperson(0.5)], attempt).score
+    assert match_poses([rperson(0.5)], attempt, MatchConfig(pass_score=score)).ok
+    assert not match_poses([rperson(0.5)], attempt, MatchConfig(pass_score=score + 1)).ok
 
 
 def test_order_matters():
@@ -139,9 +158,11 @@ def test_points_same_pose_matches():
 
 
 def test_points_different_pose_fails_with_hint():
-    # 右手を下ろした（当時は顔の横）
-    result = match_poses([rperson(0.5)], [rperson(0.5, right_wrist=[-0.9, 1.6], right_elbow=[-0.9, 0.9])])
+    # 右手を足元まで下ろし、左手も下げた（当時は両手とも顔の横）
+    attempt = [rperson(0.5, right_wrist=[-0.9, 3.0], right_elbow=[-0.9, 2.0], left_wrist=[0.9, 2.0])]
+    result = match_poses([rperson(0.5)], attempt)
     assert not result.ok
+    assert result.score < 55
     assert result.reason == "pose_mismatch"
     assert "右手をもう少し上に" in result.message
 
@@ -187,7 +208,8 @@ def test_shoulders_not_visible():
 
 def test_angles_do_not_decide_by_default():
     # ひじの角度が大きく違っても、手やひじの位置がそろっていれば開く（自由なポーズのため）
-    bent = dict(BASE, left_elbow=10.0, right_elbow=100.0)
+    bent = dict(left_elbow=170.0, right_elbow=10.0, left_shoulder=170.0, right_shoulder=0.0,
+                left_knee=60.0, right_knee=40.0)
     assert match_poses([rperson(0.5)], [rperson(0.5, angles=bent)]).ok
     assert not match_poses([rperson(0.5)], [rperson(0.5, angles=bent)], MatchConfig(judge_with_angles=True)).ok
 
@@ -247,5 +269,8 @@ def test_roundtrip_dict():
 def test_config_from_env(monkeypatch):
     monkeypatch.setenv("EMO_TOLERANCE_DEG", "15")
     monkeypatch.setenv("EMO_ALLOW_MIRROR", "true")
+    monkeypatch.setenv("EMO_PASS_SCORE", "60")
     c = MatchConfig.from_env()
     assert c.tolerance_deg == 15.0 and c.allow_mirror
+    assert c.pass_score == 60
+    assert MatchConfig().pass_score == 55

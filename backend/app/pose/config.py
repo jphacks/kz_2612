@@ -40,6 +40,9 @@ class MatchConfig:
     max_missing_points: int = 3
     # 鍵にするには、1人あたり両肩と、これだけの点（ひじ・手首・ひざ・足首）が写っている必要がある
     min_points_per_person: int = 2
+    # ポーズの合否は画面に出す一致度（0〜100）で決める。これ以上なら一致
+    # 以前は「全員が許容値以内」かつ「1点も大きく外れない」で決めていたため、一致度70%以上でも開かないことがあった
+    pass_score: int = 55
 
     @classmethod
     def from_env(cls) -> "MatchConfig":
@@ -57,6 +60,7 @@ class MatchConfig:
             max_point_diff=_env_float("EMO_MAX_POINT_DIFF", default.max_point_diff),
             max_missing_points=int(_env_float("EMO_MAX_MISSING_POINTS", default.max_missing_points)),
             min_points_per_person=int(_env_float("EMO_MIN_POINTS_PER_PERSON", default.min_points_per_person)),
+            pass_score=int(_env_float("EMO_PASS_SCORE", default.pass_score)),
         )
 
 
