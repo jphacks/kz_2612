@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   acceptInvite,
   API_BASE_URL,
+  createCapsule,
   createInvite,
   deleteCapsule,
   getContents,
@@ -83,6 +84,27 @@ describe('API client', () => {
     ])
     expect((fetchMock.mock.calls[0][1] as RequestInit).method).toBe('POST')
     expect((fetchMock.mock.calls[2][1] as RequestInit).method).toBe('POST')
+  })
+
+  it('creates a folder with an optional cover and initial photos', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ capsule_id: 'capsule-1' }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await createCapsule({
+      name: '夏合宿',
+      keyPhotoS3Key: 'uploads/demo/key/key.jpg',
+      coverPhotoS3Key: 'uploads/demo/cover/cover.jpg',
+      initialPhotoS3Keys: ['uploads/demo/content/one.jpg', 'uploads/demo/content/two.jpg'],
+    })
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe(API_BASE_URL + '/capsules')
+    expect(JSON.parse(String(init.body))).toEqual({
+      name: '夏合宿',
+      key_photo_s3_key: 'uploads/demo/key/key.jpg',
+      cover_photo_s3_key: 'uploads/demo/cover/cover.jpg',
+      initial_photo_s3_keys: ['uploads/demo/content/one.jpg', 'uploads/demo/content/two.jpg'],
+    })
   })
   it('deletes a folder through the capsule endpoint', async () => {
     const fetchMock = vi.fn().mockResolvedValue({

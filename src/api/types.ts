@@ -8,6 +8,14 @@ export interface CapsuleSummary {
   status: 'locked' | 'opened'
   people_count: number
   role: CapsuleRole
+  cover_photo_url: string | null
+}
+
+export interface CreateCapsuleInput {
+  name: string
+  keyPhotoS3Key: string
+  coverPhotoS3Key?: string
+  initialPhotoS3Keys?: string[]
 }
 
 export interface GuidePerson {

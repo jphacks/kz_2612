@@ -2,6 +2,7 @@ import type {
   ApiErrorPayload,
   CapsuleDetail,
   CapsuleSummary,
+  CreateCapsuleInput,
   ContentView,
   InviteCreated,
   InvitePreview,
@@ -92,7 +93,7 @@ export function deleteCapsule(capsuleId: string) {
 
 export async function uploadImage(
   file: Blob,
-  purpose: 'key' | 'attempt' | 'content',
+  purpose: 'key' | 'cover' | 'attempt' | 'content',
 ) {
   const contentType = file.type === 'image/png' || file.type === 'image/webp'
     ? file.type
@@ -125,11 +126,21 @@ export async function uploadImage(
   return ticket.s3_key
 }
 
-export function createCapsule(name: string, keyPhotoS3Key: string) {
+export function createCapsule({
+  name,
+  keyPhotoS3Key,
+  coverPhotoS3Key,
+  initialPhotoS3Keys = [],
+}: CreateCapsuleInput) {
   return request<CapsuleDetail>('/capsules', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, key_photo_s3_key: keyPhotoS3Key }),
+    body: JSON.stringify({
+      name,
+      key_photo_s3_key: keyPhotoS3Key,
+      cover_photo_s3_key: coverPhotoS3Key || null,
+      initial_photo_s3_keys: initialPhotoS3Keys,
+    }),
   })
 }
 
