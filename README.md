@@ -8,6 +8,12 @@
   <img src="docs/screenshots/landing.png" width="420" alt="エモカプセルのランディング画面">
 </p>
 
+## デモ
+
+**▶ <https://production.d2vpdsvyjkeeij.amplifyapp.com>**（スマートフォン推奨）
+
+**1人で試すには**：好きなメールアドレスでログイン → 自分が写った写真を鍵にしてフォルダを作る → 同じポーズで撮るとフォルダが開きます。
+
 ## 目次
 
 - [製品概要](#製品概要)
