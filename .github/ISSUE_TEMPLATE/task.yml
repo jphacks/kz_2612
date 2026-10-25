@@ -1,0 +1,70 @@
+name: タスク（Claude に任せる作業）
+description: 実装・修正・調査を Claude に任せるための依頼
+title: "[タスク] "
+labels: ["triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        このフォームで作った issue は、まず `triage`（提案・人の確認待ち）になります。
+        人が内容を確認して `agent-ready` を付けるまで、Claude は作業しません。
+        専門用語は、初めて出たところで一言の説明を付けてください。
+
+  - type: textarea
+    id: prereq
+    attributes:
+      label: 前提知識
+      description: この作業を読むのに必要な用語を、1〜2文ずつ「何のためにあるか」から書いてください。
+      placeholder: |
+        - CI: push や PR のたびに GitHub が自動で走らせる検査
+    validations:
+      required: true
+
+  - type: textarea
+    id: purpose
+    attributes:
+      label: 目的
+      description: 何のためにやるのか。作業が終わったとき、誰の何がどう良くなるかを書いてください。
+    validations:
+      required: true
+
+  - type: textarea
+    id: todo
+    attributes:
+      label: やること
+      description: 作業の内容を箇条書きで。ファイル名より「何ができるようになるか」を優先してください。
+      placeholder: |
+        - ○○ を追加する
+        - ○○ の表示を変える
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 受け入れ条件
+      description: CI（自動検査）かスクリーンショットで確かめられる形で書いてください。確かめ方も一緒に書くと確実です。
+      placeholder: |
+        - [ ] `pnpm test` が通る（例: ○○ のテストが増えている）
+        - [ ] 画面の ○○ が ○○ になっている（スクショを PR に貼る）
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: 触ってよい範囲
+      description: 変更してよいファイルやフォルダ。ここに無いものは変えない前提で作業します。
+      placeholder: |
+        - `src/` の ○○ 画面
+    validations:
+      required: true
+
+  - type: textarea
+    id: deps
+    attributes:
+      label: 依存
+      description: "先に終わっている必要がある issue や PR があれば、番号を書いてください（例: #14）。無ければ「なし」。"
+      placeholder: なし
+    validations:
+      required: true
