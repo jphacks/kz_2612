@@ -124,7 +124,8 @@ export function FolderListPage() {
                     <ArrowRight className="real-post__arrow" size={18} aria-hidden="true" />
                   </span>
 
-                  <span className="real-post__frame" aria-hidden="true">
+                  {/* 表紙がなければ鍵写真を流用せず、通常のフォルダ表紙を表示する。 */}
+                  <span className={'real-post__frame' + (folder.cover_photo_url ? ' has-cover' : '')} aria-hidden="true">
                     <span className="real-post__corners" />
                     {folder.cover_photo_url ? (
                       <img
