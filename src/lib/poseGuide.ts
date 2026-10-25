@@ -15,7 +15,7 @@ export function getPoseGuideFeedback(
   }
 
   if (status === 'loading') {
-    return { text: '骨格ガイドを準備中…', tone: 'neutral' }
+    return { text: '骨格ガイドを準備中… 撮影はできます', tone: 'neutral' }
   }
 
   if (status === 'error') {

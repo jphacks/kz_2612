@@ -1,13 +1,14 @@
 import { useEffect, useState, type RefObject } from 'react'
 import type { PoseDetector } from '@tensorflow-models/pose-detection'
 import {
-  createMoveNetPoseDetector,
+  getMoveNetPoseDetector,
   moveNetPoseToLandmarks,
 } from '../lib/moveNetPoseDetector'
 import { PoseGuideStabilizer } from '../lib/poseStabilizer'
 import type { PoseGuideStatus, StabilizedPose } from '../types/poseGuide'
 
 const FRAME_INTERVAL_MS = 125
+const GUIDE_STARTUP_TIMEOUT_MS = 9000
 
 type UsePoseGuideOptions = {
   videoRef: RefObject<HTMLVideoElement | null>
@@ -39,7 +40,7 @@ export function usePoseGuide({
   const [guideState, setGuideState] = useState<PoseGuideState>(EMPTY_STATE)
 
   useEffect(() => {
-    if (!enabled || !cameraReady) return
+    if (!enabled) return
 
     let disposed = false
     let failed = false
@@ -47,6 +48,7 @@ export function usePoseGuide({
     let lastFrameAt = 0
     let animationFrame = 0
     let detector: PoseDetector | null = null
+    let startupTimeout = 0
     const stabilizer = new PoseGuideStabilizer()
 
     queueMicrotask(() => {
@@ -121,10 +123,21 @@ export function usePoseGuide({
       animationFrame = requestAnimationFrame(tick)
     }
 
-    void createMoveNetPoseDetector()
+    startupTimeout = window.setTimeout(() => {
+      if (!disposed && !detector) {
+        setGuideState({
+          status: 'error',
+          poses: [],
+          detectedCount: 0,
+          inferenceTimeMs: null,
+        })
+      }
+    }, GUIDE_STARTUP_TIMEOUT_MS)
+
+    void getMoveNetPoseDetector()
       .then((createdDetector) => {
+        window.clearTimeout(startupTimeout)
         if (disposed) {
-          createdDetector.dispose()
           return
         }
         detector = createdDetector
@@ -137,6 +150,7 @@ export function usePoseGuide({
         animationFrame = requestAnimationFrame(tick)
       })
       .catch((error: unknown) => {
+        window.clearTimeout(startupTimeout)
         console.warn('MoveNet initialization failed.', error)
         if (!disposed) {
           setGuideState({
@@ -150,10 +164,10 @@ export function usePoseGuide({
 
     return () => {
       disposed = true
+      window.clearTimeout(startupTimeout)
       cancelAnimationFrame(animationFrame)
-      detector?.dispose()
     }
-  }, [cameraReady, enabled, sessionKey, videoRef])
+  }, [enabled, sessionKey, videoRef])
 
   if (!enabled) {
     return {

@@ -69,7 +69,9 @@ export function PoseOverlay({
       video.videoHeight === 0
     ) return
 
-    const scale = Math.max(
+    // video の object-fit: contain と同じ計算にして、全画角に線を重ねる。
+    // max（cover）にすると画面外へ切れた部分を基準にしてしまう。
+    const scale = Math.min(
       width / video.videoWidth,
       height / video.videoHeight,
     )

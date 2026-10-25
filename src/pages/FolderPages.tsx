@@ -22,6 +22,7 @@ import { AppShell, PageHeader } from '../components/AppShell'
 import { Twinkles } from '../components/Decor'
 import { Badge, Button, Card, EmptyState } from '../components/Ui'
 import { normalizeImage } from '../lib/images'
+import { preloadMoveNetPoseDetector } from '../lib/moveNetPoseDetector'
 import { getUnlockSession } from '../lib/unlockSession'
 
 function errorMessage(error: unknown) {
@@ -34,6 +35,13 @@ export function FolderListPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [reloadKey, setReloadKey] = useState(0)
+
+  useEffect(() => {
+    // Warm the model in the background before the user opens a locked folder.
+    void preloadMoveNetPoseDetector().catch(() => {
+      // The camera screen retries and remains usable without the guide.
+    })
+  }, [])
 
   useEffect(() => {
     let active = true

@@ -24,6 +24,7 @@ import { Badge, Button, Card } from '../components/Ui'
 import { usePoseGuide } from '../hooks/usePoseGuide'
 import { rememberCapture, getRememberedCapture } from '../lib/capturePreview'
 import { captureVideoFrame } from '../lib/images'
+import { preloadMoveNetPoseDetector } from '../lib/moveNetPoseDetector'
 import { getPoseGuideFeedback } from '../lib/poseGuide'
 import {
   getAuthResult,
@@ -74,6 +75,13 @@ export function UnlockPage() {
     if (!folderId) return
     getCapsule(folderId).then(setFolder).catch((reason: unknown) => setError(errorMessage(reason)))
   }, [folderId])
+
+  useEffect(() => {
+    // Start the heavy model download while people read the instructions.
+    void preloadMoveNetPoseDetector().catch(() => {
+      // The camera page retries and provides the non-blocking fallback message.
+    })
+  }, [])
 
   const activeSession = folderId ? getUnlockSession(folderId) : null
   const peopleCount = folder?.people_count ?? 0
@@ -144,6 +152,13 @@ export function UnlockPage() {
 export function CameraPermissionPage() {
   const { folderId } = useParams()
   const navigate = useNavigate()
+
+  useEffect(() => {
+    // Also preload when this route is opened directly.
+    void preloadMoveNetPoseDetector().catch(() => {
+      // The camera page retries and remains usable without the guide.
+    })
+  }, [])
 
   return (
     <AppShell>
@@ -235,7 +250,9 @@ export function CameraPage() {
     navigator.mediaDevices
       .getUserMedia({
         audio: false,
-        video: { facingMode, width: { ideal: 1280 }, height: { ideal: 720 } },
+        // 端末の標準アスペクト比を使う。16:9を指定すると、縦持ち端末で
+        // ブラウザが画角を切り取ったストリームを返す場合がある。
+        video: { facingMode: { ideal: facingMode } },
       })
       .then((value) => {
         if (!active) {
