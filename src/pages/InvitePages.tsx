@@ -122,7 +122,7 @@ export function InviteMembersPage() {
       <div className="screen screen--invite">
         <PageHeader title="メンバーを招待" eyebrow="STEP 7 / 7" />
 
-        <div className="progress-steps" aria-label="作成の進み具合">
+        <div className="progress-steps" role="img" aria-label="作成の進み具合 7ステップ中7：メンバーを招待">
           {[1, 2, 3, 4, 5, 6, 7].map((item) => (
             <span className="is-active" key={item} />
           ))}

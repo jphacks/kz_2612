@@ -182,7 +182,7 @@ export function GalleryPage() {
                 完了
               </button>
             ) : (
-              <Link className="icon-button" to={folderPath(folderId, '/settings')}>
+              <Link className="icon-button" to={folderPath(folderId, '/settings')} aria-label="フォルダの設定">
                 <Settings size={21} />
               </Link>
             )
@@ -225,7 +225,7 @@ export function GalleryPage() {
             const content = (
               <>
                 <span className="album-photo__image">
-                  <img src={photo.url ?? ''} alt="" onError={() => void reload()} />
+                  <img src={photo.url ?? ''} alt="思い出の写真" onError={() => void reload()} />
                   {selecting && (
                     <span className={'select-check ' + (isSelected ? 'is-selected' : '')}>
                       {isSelected && <Check size={15} />}
@@ -243,7 +243,6 @@ export function GalleryPage() {
                     className={'album-photo' + (isSelected ? ' is-selected' : '')}
                     type="button"
                     aria-pressed={isSelected}
-                    aria-label={'思い出の写真 ' + formatDate(photo.created_at)}
                     onClick={() => togglePhoto(photo.content_id)}
                   >
                     {content}
@@ -251,7 +250,6 @@ export function GalleryPage() {
                 ) : (
                   <Link
                     className="album-photo"
-                    aria-label={'思い出の写真 ' + formatDate(photo.created_at)}
                     to={folderPath(folderId, '/photos/' + photo.content_id)}
                   >
                     {content}

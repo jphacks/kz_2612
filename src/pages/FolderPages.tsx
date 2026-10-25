@@ -260,13 +260,14 @@ export function CreateFolderPage() {
           backTo="/folders"
         />
 
-        <div className="progress-steps" aria-label="作成の進み具合">
+        {/* role の無い要素に aria-label は付けられないので、全体を1枚の絵（role="img"）として読ませる */}
+        <div
+          className="progress-steps"
+          role="img"
+          aria-label={'作成の進み具合 7ステップ中' + step + '：' + stepTitles[step]}
+        >
           {[1, 2, 3, 4, 5, 6, 7].map((item) => (
-            <span
-              className={item <= step ? 'is-active' : ''}
-              key={item}
-              aria-label={stepTitles[item as CreateStep]}
-            />
+            <span className={item <= step ? 'is-active' : ''} key={item} />
           ))}
         </div>
 

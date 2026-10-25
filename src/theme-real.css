@@ -669,6 +669,8 @@ html {
 
 .real-posts {
   display: grid;
+  /* minmax(0, 1fr): 中の画像や線の幅に引っ張られて、カードが画面の右にはみ出さないように */
+  grid-template-columns: minmax(0, 1fr);
   gap: 30px;
   margin: 0;
   padding: 0;
@@ -1734,4 +1736,44 @@ html {
 .summary-card__cover-preview {
   background: linear-gradient(145deg, #f2f2f4, #d1d1d6);
   color: #6e6e73;
+}
+
+/* =====================================================================
+ * 主なボタンを、スクロールしなくても見える画面の下に固定する（#31）
+ * ===================================================================== */
+
+/* overflow: hidden だと、その中では position: sticky が効かない。clip なら、はみ出しを切りつつ sticky が効く */
+.app-frame {
+  overflow: clip;
+}
+
+/* 解除前の「写真認証をはじめる」と、ログインの「Googleで続ける」 */
+.lux-unlock .unlock-actions,
+.lux-login__actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  margin-inline: -20px;
+  padding: 18px 20px calc(14px + env(safe-area-inset-bottom));
+  /* 上の端だけ少しぼかし、残りは塗りつぶす（後ろの文字と重なって読みにくくならないように） */
+  background: linear-gradient(to top, var(--canvas) calc(100% - 16px), rgba(255, 255, 255, 0));
+}
+
+.lux-login__actions {
+  margin-inline: -22px;
+  padding-inline: 22px;
+}
+
+.lux-unlock .unlock-actions {
+  margin-top: 6px;
+}
+
+/* 鍵写真は、ボタンの場所を残すために少し低くする */
+.lux-unlock .pose-photo img {
+  max-height: 42dvh;
+}
+
+/* ログインの画面も、overflow: hidden のままだとボタンの固定（sticky）が効かない */
+.lux-login {
+  overflow: clip;
 }
