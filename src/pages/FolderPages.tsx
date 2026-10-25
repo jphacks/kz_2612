@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import {
   ArrowRight,
   Camera,
@@ -6,11 +6,12 @@ import {
   FolderHeart,
   ImagePlus,
   LoaderCircle,
-  MoreHorizontal,
+  LockKeyholeOpen,
   Plus,
   RefreshCw,
   Sparkles,
   Upload,
+  UserRound,
   Users,
   X,
 } from 'lucide-react'
@@ -18,6 +19,8 @@ import { Link, useNavigate } from 'react-router-dom'
 import { createCapsule, listCapsules, uploadImage } from '../api/client'
 import type { CapsuleSummary } from '../api/types'
 import { AppShell, PageHeader } from '../components/AppShell'
+import { Constellation } from '../components/Constellation'
+import { Twinkles } from '../components/Decor'
 import { Badge, Button, Card, EmptyState } from '../components/Ui'
 import { normalizeImage } from '../lib/images'
 import { getUnlockSession } from '../lib/unlockSession'
@@ -26,7 +29,6 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : '処理に失敗しました。もう一度お試しください。'
 }
 
-const coverTones = ['sunset', 'ocean', 'forest', 'violet', 'peach', 'sky']
 
 export function FolderListPage() {
   const [folders, setFolders] = useState<CapsuleSummary[]>([])
@@ -53,30 +55,20 @@ export function FolderListPage() {
 
   return (
     <AppShell showNavigation>
-      <div className="screen screen--folders">
-        <header className="home-header">
-          <div>
-            <span className="home-header__greeting">おかえりなさい</span>
-            <h1>思い出フォルダ</h1>
-          </div>
-          <Link className="avatar-button" to="/account" aria-label="アカウント">
-            YO
+      <div className="screen screen--folders real-feed">
+        {/* BeReal のような上のバー: 左に新規作成、真ん中にタイトル、右にアカウント */}
+        <header className="real-topbar">
+          <Link className="real-icon-button" to="/folders/new" aria-label="新しいフォルダをつくる">
+            <Plus size={20} />
+          </Link>
+          <h1>思い出フォルダ</h1>
+          <Link className="real-icon-button" to="/account" aria-label="アカウント">
+            <UserRound size={19} />
           </Link>
         </header>
-
-        <Link className="create-banner" to="/folders/new">
-          <span className="create-banner__icon"><Plus size={22} /></span>
-          <span>
-            <strong>新しいフォルダをつくる</strong>
-            <small>鍵になる1枚を選んではじめよう</small>
-          </span>
-          <ArrowRight size={20} />
-        </Link>
-
-        <div className="section-heading">
-          <h2>参加中</h2>
-          <span>{folders.length} folders</span>
-        </div>
+        <p className="real-feed__lead">
+          <strong>{folders.length}</strong>個のフォルダ
+        </p>
 
         {loading && (
           <div className="api-state" role="status">
@@ -103,52 +95,58 @@ export function FolderListPage() {
           />
         )}
 
-        <div className="folder-list">
+        <ul className="real-posts">
           {folders.map((folder, index) => {
             const isUnlocked = Boolean(getUnlockSession(folder.capsule_id))
             const destination = isUnlocked
               ? '/folders/' + folder.capsule_id + '/photos'
               : '/folders/' + folder.capsule_id + '/unlock'
+            const hasPose = folder.poses?.some((pose) => Object.values(pose).some(Boolean))
 
             return (
-              <Link className="folder-card" to={destination} key={folder.capsule_id}>
-                <div className={'folder-card__cover photo-tone--' + coverTones[index % coverTones.length]}>
-                  <span className="folder-card__shine" />
-                  {folder.cover_photo_url && (
-                    <img
-                      className="folder-card__cover-image"
-                      src={folder.cover_photo_url}
-                      alt=""
-                      onError={(event) => { event.currentTarget.style.display = 'none' }}
-                    />
+              <li key={folder.capsule_id} style={{ '--i': index } as CSSProperties}>
+                <Link className={'real-post' + (isUnlocked ? ' is-open' : '')} to={destination}>
+                  <span className="real-post__head">
+                    <span className="real-avatar" aria-hidden="true"><Users size={16} /></span>
+                    <span className="real-post__title">
+                      <strong>{folder.name}</strong>
+                      <small>
+                        {folder.people_count}人
+                        <span aria-hidden="true">・</span>
+                        {folder.role === 'owner' ? '作成者' : '参加中'}
+                      </small>
+                    </span>
+                    <ArrowRight className="real-post__arrow" size={18} aria-hidden="true" />
+                  </span>
+
+                  {/* 表紙があれば表紙を、なければファインダーの中にあの日のポーズを線だけで出す（鍵の写真は見せない） */}
+                  <span className={'real-post__frame' + (folder.cover_photo_url ? ' has-cover' : '')} aria-hidden="true">
+                    {folder.cover_photo_url && (
+                      <img
+                        className="real-post__cover"
+                        src={folder.cover_photo_url}
+                        alt=""
+                        onError={(event) => { event.currentTarget.style.display = 'none' }}
+                      />
+                    )}
+                    <span className="real-post__corners" />
+                    {hasPose
+                      ? <Constellation poses={folder.poses!} draw={false} className="real-post__pose" />
+                      : <FolderHeart className="real-post__placeholder" size={32} />}
+                    <Twinkles count={3} />
+                  </span>
+
+                  {isUnlocked && (
+                    <span className="real-post__state is-open">
+                      <LockKeyholeOpen size={14} />開いています
+                    </span>
                   )}
-                  <FolderHeart size={27} />
-                  <Badge tone={isUnlocked ? 'success' : 'neutral'}>
-                    {isUnlocked ? '開封中' : '認証が必要'}
-                  </Badge>
-                </div>
-                <div className="folder-card__body">
-                  <div className="folder-card__title-row">
-                    <h3>{folder.name}</h3>
-                    <MoreHorizontal size={19} />
-                  </div>
-                  <div className="folder-card__meta">
-                    <span><Users size={15} />鍵写真は{folder.people_count}人</span>
-                    <span>{folder.role === 'owner' ? '作成者' : '参加中'}</span>
-                  </div>
-                </div>
-              </Link>
+                </Link>
+              </li>
             )
           })}
-        </div>
+        </ul>
 
-        <Card className="tip-card">
-          <span className="tip-card__icon"><Sparkles size={19} /></span>
-          <div>
-            <strong>ポーズのコツ</strong>
-            <p>肩と手足が見えるように、少しカメラから離れて撮ろう。</p>
-          </div>
-        </Card>
       </div>
     </AppShell>
   )

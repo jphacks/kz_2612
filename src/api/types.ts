@@ -8,6 +8,8 @@ export interface CapsuleSummary {
   status: 'locked' | 'opened'
   people_count: number
   role: CapsuleRole
+  /** 鍵の写真の各人の体の点（左から順）。写真は見せずにポーズの形だけを出す用。古いバックエンドだと無い */
+  poses?: Array<Record<string, [number, number] | null>>
   cover_photo_url: string | null
 }
 
