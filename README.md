@@ -48,18 +48,50 @@
 
 ## 画面と利用フロー
 
-### 実際の画面
+### 実機デモ：作成から開封まで
+
+フォルダを作り、仲間を招待し、あの日の写真を再現して思い出を開くまでの体験です。各画像をクリックすると大きく表示できます。
 
 <table>
   <tr>
-    <td align="center"><img src="docs/screenshots/login.png" width="260" alt="ログイン画面"></td>
-    <td align="center"><img src="docs/screenshots/create-folder.png" width="260" alt="フォルダ作成画面"></td>
-    <td align="center"><img src="docs/screenshots/camera-permission.png" width="260" alt="認証カメラの準備画面"></td>
+    <td align="center"><a href="docs/screenshots/demo/landing.webp"><img src="docs/screenshots/demo/landing.webp" width="260" alt="EMO CAPSULEのトップページ"></a></td>
+    <td align="center"><a href="docs/screenshots/demo/invite-members.webp"><img src="docs/screenshots/demo/invite-members.webp" width="260" alt="メンバー招待画面"></a></td>
   </tr>
   <tr>
-    <td align="center"><strong>ログイン</strong><br>Googleまたは開発用アカウントで開始</td>
-    <td align="center"><strong>フォルダ作成</strong><br>7ステップで必要情報を登録</td>
-    <td align="center"><strong>写真認証</strong><br>用途と保存方針を確認して撮影</td>
+    <td align="center"><strong>1. トップページ</strong><br>思い出の写真を鍵にする体験を紹介</td>
+    <td align="center"><strong>2. メンバー招待</strong><br>作成者が招待リンクを共有（最大4人）</td>
+  </tr>
+  <tr>
+    <td align="center"><a href="docs/screenshots/demo/unlock-guide.webp"><img src="docs/screenshots/demo/unlock-guide.webp" width="260" alt="鍵写真と骨格ガイドの確認画面"></a></td>
+    <td align="center"><a href="docs/screenshots/demo/camera-permission.webp"><img src="docs/screenshots/demo/camera-permission.webp" width="260" alt="認証カメラの準備画面"></a></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>3. 鍵写真を確認</strong><br>人数・立ち位置・ポーズを見て再現</td>
+    <td align="center"><strong>4. カメラの準備</strong><br>判定用途・撮り直し・顔照合を事前に説明</td>
+  </tr>
+  <tr>
+    <td align="center"><a href="docs/screenshots/demo/auth-failed.webp"><img src="docs/screenshots/demo/auth-failed.webp" width="260" alt="顔認証に失敗したときの案内画面"></a></td>
+    <td align="center"><a href="docs/screenshots/demo/matched-tap-to-open.webp"><img src="docs/screenshots/demo/matched-tap-to-open.webp" width="260" alt="写真認証に成功した開封前画面"></a></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>5. 失敗時の案内</strong><br>誰の顔やポーズが違うかを具体的に表示</td>
+    <td align="center"><strong>6. 認証成功</strong><br>ポーズと顔が一致すると、思い出を開封できる</td>
+  </tr>
+  <tr>
+    <td align="center"><a href="docs/screenshots/demo/memory-reveal.webp"><img src="docs/screenshots/demo/memory-reveal.webp" width="260" alt="鍵写真と現在の写真を重ねた演出画面"></a></td>
+    <td align="center"><a href="docs/screenshots/demo/auth-success.webp"><img src="docs/screenshots/demo/auth-success.webp" width="260" alt="認証成功の詳細画面"></a></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>7. あの日と今日</strong><br>鍵写真と現在の写真を重ねて再会を演出</td>
+    <td align="center"><strong>8. 判定結果</strong><br>一致度・顔照合・12時間の閲覧状態を表示</td>
+  </tr>
+  <tr>
+    <td align="center"><a href="docs/screenshots/demo/gallery.webp"><img src="docs/screenshots/demo/gallery.webp" width="260" alt="共有アルバム画面"></a></td>
+    <td align="center"><a href="docs/screenshots/demo/account.webp"><img src="docs/screenshots/demo/account.webp" width="260" alt="アカウント画面"></a></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>9. 共有アルバム</strong><br>参加者全員で写真を閲覧・追加・削除</td>
+    <td align="center"><strong>10. アカウント</strong><br>ログイン状態とフォルダごとの写真認証を確認</td>
   </tr>
 </table>
 
