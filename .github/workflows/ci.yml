@@ -71,3 +71,18 @@ jobs:
           else
             git ls-files | bash scripts/check_large_files.sh
           fi
+      # API の契約（docs/openapi.json）と、そこから作ったフロントの型（src/api/generated.ts）が最新か。
+      # バックの API を変えたら `python backend/scripts/export_openapi.py` と `pnpm gen:api` を実行してコミットする。
+      # Python が入っているこのジョブに Node を足している（frontend ジョブに足すと mediapipe など重い依存が要るため）
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: OpenAPI と TypeScript の型が最新か
+        working-directory: .
+        run: |
+          pnpm install --frozen-lockfile
+          python backend/scripts/export_openapi.py
+          pnpm gen:api
+          git diff --exit-code -- docs/openapi.json src/api/generated.ts

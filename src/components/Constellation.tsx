@@ -1,7 +1,7 @@
 import { useState, type CSSProperties } from 'react'
 
 /** 体の点の座標（0〜1、画像の左上が原点）。写っていない点は null */
-export type PosePoints = Record<string, [number, number] | null>
+export type PosePoints = Record<string, number[] | null> // API の points は [x, y] の number[]
 
 // 星座の線: 肩・腕・胴・脚
 const BONES: Array<[string, string]> = [

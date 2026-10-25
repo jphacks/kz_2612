@@ -12,6 +12,7 @@ const successResponse: OpenResponse = {
     expected_people: 2,
     detected_people: 2,
     mirrored: false,
+    people: [],
     faces: [],
   },
   attempts_left: null,
