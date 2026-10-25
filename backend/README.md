@@ -44,7 +44,7 @@ RTMPose は画面外の関節も推測して返すので、確からしさ0.5未
 .venv/Scripts/python -m app.dev
 ```
 
-ブラウザで http://localhost:8000/dev を開く（`app.dev` は開封日の制限も外して起動する）（ローカル専用の簡易ページ。カメラで鍵を撮る → メッセージを入れる → ポーズで開ける、が試せる）。
+ブラウザで http://localhost:8000/dev を開く（`app.dev` は開封日の制限も外して起動する）（ローカル専用の簡易ページ。カメラで鍵を撮る → 写真を入れる → ポーズで開ける、が試せる）。
 鍵の写真は両ひじと両手首まで写るように撮る。
 
 ## テスト
@@ -64,6 +64,7 @@ RTMPose は画面外の関節も推測して返すので、確からしさ0.5未
 | `app/pose/rtm_detector.py` | RTMPose で画像から人ごとの骨格を抽出（既定） |
 | `app/pose/detector.py` | MediaPipe Pose Landmarker 版（`EMO_POSE_ENGINE=mediapipe`） |
 | `app/pose/base.py` | 両エンジン共通（鍵として使えるかの確認、骨格プレビューの描画） |
+| `app/pose/face.py` | 顔の判定（顔の検出・特徴・人への結びつけ・照合・顔の記憶の更新） |
 | `app/pose/config.py` | 判定の設定値（環境変数で上書き可） |
 | `app/pose/cli.py` | 手元で2枚を比べるツール |
 
@@ -76,6 +77,11 @@ RTMPose は画面外の関節も推測して返すので、確からしさ0.5未
 | `EMO_MAX_MISSING_POINTS` | 2 | 開けるとき、当時写っていた点が1人何点まで隠れてよいか |
 | `EMO_MIN_POINTS_PER_PERSON` | 2 | 鍵にするのに必要な、1人あたりの点（ひじ・手首・ひざ・足首）の数（両肩は必須） |
 | `EMO_JUDGE_WITH_ANGLES` | false | 関節の角度も合否に使うか（既定は表示用だけ） |
+| `EMO_FACE_CHECK` | true | 顔の判定をするか（YuNet＋SFace） |
+| `EMO_FACE_THRESHOLD` | 0.40 | 顔の記憶のうちいちばん似ている顔との類似度のしきい値 |
+| `EMO_FACE_MARGIN` | 0.05 | ほかの立ち位置の人の記憶より、どれだけ似ている必要があるか |
+| `EMO_MAX_HIDDEN_FACES` | 0 | 顔が見えなくてもよい人数 |
+| `EMO_FACE_MEMORY` | 5 | 開けたときの顔を1人何件まで覚えるか（鍵の写真の顔は別にずっと残す） |
 | `EMO_TOLERANCE_DEG` | 20 | 角度を使うときの、各人の平均角度差の許容値（度） |
 | `EMO_MAX_JOINT_DIFF_DEG` | 45 | 1関節だけ大きくずれたときの上限（度） |
 | `EMO_ALLOW_MIRROR` | false | 左右反転した撮影画像も一致とみなすか |

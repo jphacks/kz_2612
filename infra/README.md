@@ -54,6 +54,43 @@ aws lambda add-permission --function-name emo-api --statement-id apigw-invoke --
 infra\deploy.cmd
 ```
 
+## Googleログイン（Cognito）
+
+フロントはCognitoの認証コードフロー（PKCE）に対応済み。AWS側は
+`infra/cognito-google.yaml` をCloudFormationで作成する。
+
+事前にGoogle Cloud ConsoleでOAuthクライアントを作り、承認済みの
+リダイレクトURIへ次を登録する。
+
+`https://<Cognitoドメイン>/oauth2/idpresponse`
+
+API IDと既存Lambda integration IDは次のコマンドで確認できる。
+
+```bat
+aws apigatewayv2 get-apis --query "Items[?Name=='emo-api'].ApiId" --output text
+aws apigatewayv2 get-integrations --api-id <ApiId> --query "Items[0].IntegrationId" --output text
+```
+
+CloudFormationには次を指定する。
+
+- `ApiId`：既存HTTP APIのID
+- `ApiIntegrationId`：上で確認したintegration ID
+- `GoogleClientId` / `GoogleClientSecret`：Google OAuthクライアント
+- `FrontendUrl`：Amplifyのオリジン
+- `DomainPrefix`：世界で一意なCognitoドメイン名
+
+作成後、Outputsの値をフロントのビルド環境へ設定する。
+
+```env
+VITE_COGNITO_DOMAIN=<CognitoDomain>
+VITE_COGNITO_CLIENT_ID=<ClientId>
+VITE_COGNITO_REDIRECT_URI=https://<AmplifyのURL>/auth/callback
+```
+
+最後に `infra/lambda-env.json` の `EMO_AUTH_MODE` を
+`cognito` へ変更してLambda設定を反映する。先に変更すると既存の
+開発用ヘッダーが使えなくなるため、CognitoとAPI Gatewayの設定完了後に行う。
+
 ## 設定を変えるとき
 
 - フロントを公開したら、そのURLを `infra/s3-cors.json` の `AllowedOrigins` と `infra/lambda-env.json` の `EMO_CORS_ORIGINS`（カンマ区切り）に足して反映する

@@ -21,7 +21,7 @@
 | 形式 | JSON（`Content-Type: application/json`） |
 | 日付 | 開封日は `YYYY-MM-DD`（日本時間、**任意**）。日時は ISO 8601（UTC） |
 | 認証 | Cognito 導入までは `X-User-Id` ヘッダーでユーザーを指定（無ければ `demo-user`）。メールアドレスは `X-User-Email`（任意） |
-| ロック解除 | ポーズが一致すると `unlock.token` が返る。ライブラリの API には `X-Unlock-Token` ヘッダーで付ける（既定は期限なし） |
+| ロック解除 | ポーズが一致すると `unlock.token` が返る。ライブラリの API には `X-Unlock-Token` ヘッダーで付ける（最大12時間） |
 
 ### 画像のアップロード（全画像共通の2ステップ）
 
@@ -41,7 +41,7 @@ await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
 // 3. 以降の API には up.s3_key を渡す
 ```
 
-- `purpose`: `key`（思い出の写真）／`attempt`（開封時の撮影）／`content`（中身の写真）。用途を間違えると `invalid_s3_key` になる
+- `purpose`: `key`（鍵写真）／`cover`（任意の表紙画像）／`attempt`（開封時の撮影）／`content`（中身の写真）。用途を間違えると `invalid_s3_key` になる
 - アップロードURLの期限は5分、上限10MB
 - **開封時の撮影画像は左右反転しないで送る**（`<video>` を鏡像表示していても、canvas に描くときは反転を戻す）
 
@@ -55,9 +55,9 @@ await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
 | GET | `/capsules/{id}` | 詳細・写真認証カメラのガイド | 写真認証画面 |
 | POST | `/capsules/{id}/open` | ポーズでロック解除 | 写真を撮る → 認証中/成功/失敗 |
 | GET | `/capsules/{id}/contents` | ライブラリ（写真一覧）🔓 | 写真ライブラリ画面・1枚写真画面 |
-| POST | `/capsules/{id}/contents` | 写真（メッセージ）を追加 | 追加 → アップロード |
+| POST | `/capsules/{id}/contents` | 写真を追加（最大20枚） | 追加 → アップロード |
 | DELETE | `/capsules/{id}/contents/{content_id}` | 写真を削除 🔓 | 選択 → 削除 |
-| GET | `/capsules/{id}/album` | 認証アルバム（解除した瞬間の写真）🔓 | （フローには未記載） |
+| DELETE | `/capsules/{id}` | フォルダを削除（参加者なら誰でも） | （フローには未記載） |
 | POST | `/capsules/{id}/invites` | 招待リンクを発行（作成者のみ） | 作成登録画面（参加アカウント） |
 | GET | `/invites/{token}` | 招待の中身を確認（参加前） | 招待ページ |
 | POST | `/invites/{token}/accept` | 招待から参加 | 招待ページ |
@@ -69,7 +69,7 @@ await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
 
 ```
 フォルダー一覧  GET /capsules
- ├ フォルダ新規作成 → 作成登録画面   POST /uploads(key) → POST /capsules → POST /capsules/{id}/invites
+ ├ フォルダ新規作成 → 作成登録画面   POST /uploads(key・任意のcover・0〜20枚のcontent) → POST /capsules → POST /capsules/{id}/invites
  └ フォルダ押下 → 写真認証画面       GET /capsules/{id}（guide でガイド表示）
      └ 写真を撮る                    POST /uploads(attempt) → POST /capsules/{id}/open
          ├ 失敗 → result.message を表示して撮り直し
@@ -77,7 +77,7 @@ await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
              ├ 一覧・1枚表示         GET /capsules/{id}/contents   （X-Unlock-Token）
              ├ 追加 → アップロード    POST /uploads(content) → POST /capsules/{id}/contents
              ├ 選択 → 削除           DELETE /capsules/{id}/contents/{content_id}（X-Unlock-Token）
-             └ 戻る → トークンを捨てる（次に入るときはまたポーズで解除）
+             └ 期限切れ・ログアウト・アカウント切替 → トークンを破棄
 ```
 | GET | `/health` | 死活確認 | — |
 | POST | `/warmup` | モデルを温める（発表直前に叩く） | — |
@@ -103,10 +103,17 @@ await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
 
 ```json
 // request
-{ "name": "成人式", "open_date": "2036-01-12", "key_photo_s3_key": "uploads/demo-user/key/3f2a....jpg" }
+{
+  "name": "成人式",
+  "open_date": "2036-01-12",
+  "key_photo_s3_key": "uploads/demo-user/key/3f2a....jpg",
+  "cover_photo_s3_key": "uploads/demo-user/cover/7a1b....jpg",
+  "initial_photo_s3_keys": ["uploads/demo-user/content/8c2d....jpg"]
+}
 ```
 
 `open_date` は省略できる（省略するといつでも開けられる。一覧・詳細では `open_date` と `days_until_open` が `null`）。
+`cover_photo_s3_key` は任意。省略時は鍵写真を流用せず通常のフォルダ表紙を表示する。`initial_photo_s3_keys` は作成時に入れる写真0〜20枚。
 
 201 で下の「カプセル詳細」を返す。`preview_url` が骨格を重ねたプレビュー画像。
 
@@ -128,7 +135,8 @@ await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
     "days_until_open": 3367,
     "status": "locked",          // locked | opened
     "people_count": 4,
-    "role": "owner"              // owner | member
+    "role": "owner",             // owner | member
+    "cover_photo_url": "https://..." // 表紙未設定なら null
   }
 ]
 ```
@@ -169,10 +177,9 @@ await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
 - 左右は「写っている本人から見た左右」（MediaPipe と同じ）
 - 署名付きURLは60秒で切れるので、表示し直すときは詳細を取り直す
 
-#### POST /capsules/{id}/contents — 写真・メッセージの追加
+#### POST /capsules/{id}/contents — 写真の追加
 
 ```json
-{ "type": "message", "text": "10年後のみんなへ" }
 { "type": "photo", "s3_key": "uploads/demo-user/content/....jpg" }
 ```
 
@@ -193,7 +200,7 @@ await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
   "ok": false,
   "result": {
     "ok": false,
-    "reason": "pose_mismatch",      // count_mismatch | pose_mismatch | body_not_visible | no_person | null
+    "reason": "pose_mismatch",      // count_mismatch | pose_mismatch | body_not_visible | no_person | face_not_visible | face_mismatch | null
     "score": 62,                    // 一致度ゲージ 0〜100。許容値ちょうどで70
     "message": "あと少し！右の人の右手をもう少し上に",   // そのまま表示してよい
     "expected_people": 2,
@@ -213,7 +220,8 @@ await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
           "right_elbow": { "key_deg": 170.0, "attempt_deg": 129.0, "diff_deg": 41.0, "ok": false }
         }
       }
-    ]
+    ],
+    "faces": []                     // 顔の判定。ポーズが合ったときだけ入る（下の例）
   },
   "attempts_left": 4,
   "locked_until": null,
@@ -229,18 +237,16 @@ await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
 ```
 
 - `unlock.token` を保存し、ライブラリの API（🔓）に `X-Unlock-Token` ヘッダーで付ける
-- 有効なのは**解除した本人・そのフォルダだけ**。既定は期限なし（`expires_at: null`）。`EMO_UNLOCK_MINUTES` で期限を付けた場合、切れると 401 `unlock_expired` になるので、写真認証画面に戻す
-- 「戻る」でフォルダー一覧に戻ったらトークンは捨てる（次に入るときはまたポーズで解除する）
+- 有効なのは**解除した本人・そのフォルダだけ**で、既定は最大12時間。期限が切れると 401 `unlock_expired` になるので、写真認証画面に戻す
+- 画面更新やフォルダー一覧へ戻る操作ではトークンを保持する。期限切れ・ログアウト・アカウント切替時に破棄する
 
-`opened` の中身の URL は60秒で失効する。成功画面（当時と今を並べる）ですぐ使う。
+`opened` の写真 URL は60秒で失効する。認証に使った撮影画像は判定用に読み込んだ直後に削除し、レスポンスにも含めない。
 
 ```json
 "opened": {
   "key_photo_url": "https://...",       // 当時
-  "attempt_photo_url": "https://...",   // 今（並べて表示する）
   "contents": [
-    { "content_id": "...", "type": "message", "text": "10年後のみんなへ", "url": null, "author_id": "...", "created_at": "..." },
-    { "content_id": "...", "type": "photo", "text": null, "url": "https://...", "author_id": "...", "created_at": "..." }
+    { "content_id": "...", "type": "photo", "url": "https://...", "author_id": "...", "created_at": "..." }
   ],
   "url_expires_in": 60
 }
@@ -251,8 +257,24 @@ await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
 - 当時は写っていたのに今は隠れている点は、1人2点まで許す（少しずれた扱いで、スコアが下がる）。3点以上隠れると `reason: "body_not_visible"` と `missing_joints` を返す
 - 点の名前: `left_elbow` `right_elbow` `left_wrist` `right_wrist` `left_knee` `right_knee` `left_ankle` `right_ankle`（左右は写っている本人から見た左右）
 - 関節の角度（`joints`）は表示用。ひじを曲げたポーズでは少し動くだけで角度が大きく変わるので、合否には使わない
+
+**顔の判定**（ポーズが合ったあとに行う）
+
+```json
+"faces": [
+  { "position": 0, "visible": true, "checked": true, "ok": true,  "similarity": 0.82, "others": 0.25 },
+  { "position": 1, "visible": true, "checked": true, "ok": false, "similarity": 0.10, "others": 0.05 }
+]
+```
+
+- 立ち位置ごとに、**鍵の写真の顔と、これまで開けたときの顔（顔の記憶）**のうち、いちばん似ている顔と比べる。`similarity` は −1〜1
+- `similarity` が 0.40 以上、かつ、ほかの立ち位置の人の記憶（`others`）より 0.05 以上似ていれば `ok`
+- 顔が見えない人がいると `reason: "face_not_visible"`、本人と確かめられない人がいると `reason: "face_mismatch"`（`message` に声かけが入る）
+- `checked: false` は、鍵の写真でその人の顔が見えず、まだ記憶がない人（判定しない。開けたときの顔から覚える）
+- 開けるのに成功すると、そのときの顔が記憶に加わる（年月で顔が変わってもついていける）
+- 詳細（`GET /capsules/{id}`）の `guide[].face_registered` で、顔の記憶があるかわかる
 - 失敗によるロックは既定で無し（何回でも撮り直せる。`attempts_left` は `null`）。`EMO_MAX_FAILURES` を設定すると、その回数の失敗でロックされ 423 `locked` になる。失敗に数えるのは `count_mismatch` と `pose_mismatch` だけ
-- 何度でも開けられる。開けるたびに認証アルバムに写真が増える（F-7）
+- 何度でも開けられる。認証写真は成功・失敗にかかわらず保存しない
 
 | エラー | code | 意味 |
 | --- | --- | --- |
@@ -263,10 +285,10 @@ await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
 
 #### GET /capsules/{id}/contents — ライブラリ 🔓
 
-形は `opened` と同じ（`key_photo_url`・`attempt_photo_url`（直近の解除写真）・`contents`・`url_expires_in`）。
+形は `opened` と同じ（`key_photo_url`・`contents`・`url_expires_in`）。
 
 - **写真の URL は60秒で失効する。** 1枚表示で左右にスライドするときなど、表示できなくなったら（`<img>` の `onerror`）このAPIを呼び直して URL を取り直す。解除中なら何度呼んでもよい
-- `contents` は追加した順。`author_id` が自分か、自分が作成者（`role: "owner"`）なら削除ボタンを出す
+- `contents` は追加した順。削除ボタンは全員に出してよい（参加者なら誰の写真でも消せる）
 
 | エラー | code | 意味 |
 | --- | --- | --- |
@@ -277,32 +299,44 @@ await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
 
 204（本文なし）。画像ファイルも消える。複数選んで消すときは1枚ずつ呼ぶ。
 
-- 消せるのは**追加した本人か、フォルダの作成者**
+- フォルダの**参加者なら誰でも**、誰が追加した写真でも消せる（共有フォルダのため）
 
 | エラー | code | 意味 |
 | --- | --- | --- |
-| 403 | `not_author` | 他の人が追加した写真 |
+| 403 | `not_member` | フォルダの参加者ではない |
 | 404 | `content_not_found` | もう消えている |
 | 401 | `unlock_required` / `unlock_expired` | 解除していない・期限切れ |
 
-#### GET /capsules/{id}/album — 認証アルバム 🔓
+#### DELETE /capsules/{id} — フォルダを削除
 
-ロックを解除した瞬間の写真の一覧（解除するたびに増える）。
+204（本文なし）。**フォルダの参加者なら誰でも**消せる（作成者でなくてもよい）。ポーズでの解除は不要（メンバーが揃わなくても消せるように）。
 
-```json
-// album
-{ "key_photo_url": "https://...", "entries": [ { "opened_at": "...", "photo_url": "https://...", "score": 91 } ], "url_expires_in": 60 }
-```
+消えるもの（元に戻せない。メンバー全員から見えなくなる）:
+
+| 種類 | 中身 |
+| --- | --- |
+| 鍵 | 鍵の写真、骨格プレビュー、鍵のポーズ、顔の記憶 |
+| 中身 | 入れた写真 |
+| 認証まわり | 解除セッション（認証写真と認証アルバムは保存しない） |
+| 参加 | メンバー、招待リンク |
+
+- 消したあとは、そのフォルダの API はすべて 404 `capsule_not_found`、招待リンクも 404 になる
+- 誰でも消せるので、画面では「元に戻せない」ことを伝える確認ダイアログを出してください
+
+| エラー | code | 意味 |
+| --- | --- | --- |
+| 403 | `not_member` | フォルダの参加者ではない |
+| 404 | `capsule_not_found` | もう消えている |
 
 ### メンバー招待（F-3）
 
 作成者が招待リンクを発行 → 受け取った人がリンクを開いてログイン → 「参加する」でメンバーになる。
-メンバーは中身の追加・開封・アルバムの閲覧ができる（招待リンクの発行は作成者だけ）。
+参加後は全員が写真の追加・削除・フォルダ削除・開封を同じ権限で行える（招待リンクの発行だけは作成者のみ）。
 
 **招待リンクの URL はフロントで組み立てる**：`https://<フロントのURL>/invite/{token}` のようなページを作り、そのページで下の GET → POST を呼ぶ。
 
-- リンクは期限（14日）まで何人でも使える（結婚式のゲスト全員に同じリンクを配る想定）
-- メンバーの人数に上限はない。開けるときに揃う必要があるのは、鍵の写真に写っている人数（`people_count`）
+- リンクは期限（14日）まで使えるが、作成者を含めて4人に達すると新しく参加できない
+- 参加アカウントと鍵写真の人物・人数は照合しない。参加登録はフォルダを自分の一覧に表示するために行う
 - 開封済みのフォルダにも参加できる。ただし中身を見るには自分たちでポーズを揃えて解除する必要があるので、リンクを知っているだけでは見られない
 
 #### POST /capsules/{id}/invites — 招待リンクを発行（作成者のみ）
@@ -363,7 +397,7 @@ await fetch(up.upload_url, { method: "PUT", headers: up.headers, body: blob });
 | --- | --- |
 | 400 | `invalid_s3_key` `invalid_image` `text_required` `s3_key_required` |
 | 401 | `unlock_required` `unlock_expired` |
-| 403 | `not_member` `not_owner` `not_author` |
+| 403 | `not_member` `not_owner` |
 | 404 | `capsule_not_found` `upload_not_found` `invite_not_found` `content_not_found` |
 | 409 | `not_open_yet` |
 | 410 | `invite_expired` |
@@ -419,9 +453,13 @@ docker run --rm -p 9000:8080 -e EMO_BUCKET=... -e EMO_TABLE=... -e AWS_REGION=ap
 | `EMO_CORS_ORIGINS` | ✓ | `https://main.xxxx.amplifyapp.com,http://localhost:5173` | API の CORS 許可オリジン（カンマ区切り） |
 | `EMO_IGNORE_OPEN_DATE` | | `false` | デモ時は `true` で開封日前でも開けられる |
 | `EMO_INVITE_DAYS` | | `14` | 招待リンクの有効期限（日） |
-| `EMO_UNLOCK_MINUTES` | | `0` | ポーズで解除してからライブラリを使える時間（分）。0 は期限なし |
+| `EMO_UNLOCK_MINUTES` | | `720` | ポーズで解除してからライブラリを使える時間（分）。既定は最大12時間 |
 | `EMO_POINT_TOLERANCE` | | `0.35` | 点の位置のずれの許容値（肩幅を1） |
 | `EMO_MAX_MISSING_POINTS` | | `2` | 開けるとき、当時写っていた点が何点まで隠れてよいか |
+| `EMO_FACE_CHECK` | | `true` | 顔の判定をするか |
+| `EMO_FACE_THRESHOLD` / `EMO_FACE_MARGIN` | | `0.40` / `0.05` | 顔の類似度のしきい値と、ほかの人との差 |
+| `EMO_MAX_HIDDEN_FACES` | | `0` | 顔が見えなくてもよい人数 |
+| `EMO_FACE_MEMORY` | | `5` | 開けたときの顔を1人何件まで覚えるか |
 | `EMO_MAX_FAILURES` / `EMO_LOCK_MINUTES` | | `0` / `10` | 何回失敗したら何分ロックするか。0 はロックしない |
 | `EMO_DETECTION_CONFIDENCE` | | `0.2` | 人物検出のしきい値 |
 
@@ -448,9 +486,12 @@ docker run --rm -p 9000:8080 -e EMO_BUCKET=... -e EMO_TABLE=... -e AWS_REGION=ap
 | Capsule | `CAPSULE#{id}` | `META` | | |
 | Member | `CAPSULE#{id}` | `MEMBER#{userId}` | `USER#{userId}` | `CAPSULE#{id}` |
 | Content | `CAPSULE#{id}` | `CONTENT#{createdAt}#{cid}` | | |
-| OpenRecord | `CAPSULE#{id}` | `OPEN#{openedAt}` | | |
 | Invite | `INVITE#{token}` | `META` | | |
 | UnlockSession | `SESSION#{token}` | `META` | | |
+| InviteRef | `CAPSULE#{id}` | `INVITE#{token}` | | |
+| SessionRef | `CAPSULE#{id}` | `SESSION#{token}` | | |
+
+`*Ref` はフォルダを削除するときの目印（別のパーティションにある招待・解除セッションを漏れなく消すため）。
 
 任意：テーブルの TTL を属性 `ttl` で有効にすると、期限切れの UnlockSession が自動で消える（有効にしなくても動く）。
 
@@ -466,7 +507,7 @@ aws dynamodb create-table --table-name emo-timecapsule \
 ### S3
 
 - パブリックアクセスは**すべてブロック**。閲覧は署名付きURLのみ
-- キーの使い方: `uploads/{userId}/{key|attempt|content}/...`（ブラウザから PUT）、`previews/{capsuleId}.jpg`（Lambda が書き込む）
+- キーの使い方: `uploads/{userIdのハッシュ}/{key|cover|attempt|content}/...`（ブラウザから PUT）、`previews/{capsuleId}.jpg`（Lambda が書き込む）
 - ブラウザから直接 PUT / GET するので CORS 設定が必要:
 
 ```json

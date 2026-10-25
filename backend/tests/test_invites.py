@@ -5,7 +5,7 @@ from dataclasses import replace
 
 from app import deps
 from app.main import app
-from tests.test_api import create, env, open_with, upload  # noqa: F401  (env は fixture)
+from tests.test_api import add_photo, create, env, open_with, upload  # noqa: F401  (env は fixture)
 
 A = {"X-User-Id": "alice", "X-User-Email": "alice@example.com"}
 B = {"X-User-Id": "bob", "X-User-Email": "bob@example.com"}
@@ -40,7 +40,7 @@ def test_invite_and_join(env):
     # 参加後はカプセルが一覧に出て、中身を追加できる
     assert [c["capsule_id"] for c in client.get("/capsules", headers=B).json()] == [cid]
     assert client.get(f"/capsules/{cid}", headers=B).json()["role"] == "member"
-    res = client.post(f"/capsules/{cid}/contents", json={"type": "message", "text": "ボブより"}, headers=B)
+    res = client.post(f"/capsules/{cid}/contents", json={"type": "photo", "s3_key": upload(client, "content", "bob")}, headers=B)
     assert res.status_code == 201
 
     members = client.get(f"/capsules/{cid}/members", headers=B).json()
@@ -51,16 +51,16 @@ def test_invite_and_join(env):
     assert client.get(f"/invites/{token}", headers=B).json()["already_member"] is True
 
 
-def test_member_can_open_and_see_others_messages(env):
+def test_member_can_open_and_see_others_photos(env):
     client, _, _ = env
     cid = create(client).json()["capsule_id"]
-    client.post(f"/capsules/{cid}/contents", json={"type": "message", "text": "アリスより"}, headers=A)
+    add_photo(client, cid, "alice")
     token = invite(client, cid).json()["token"]
     client.post(f"/invites/{token}/accept", headers=B)
 
     res = open_with(client, cid, user="bob").json()
     assert res["ok"] is True
-    assert [c["text"] for c in res["opened"]["contents"]] == ["アリスより"]
+    assert [c["author_id"] for c in res["opened"]["contents"]] == ["alice"]
 
 
 def test_accept_twice_and_owner_accepting_is_harmless(env):
@@ -72,6 +72,21 @@ def test_accept_twice_and_owner_accepting_is_harmless(env):
     # 作成者が自分のリンクを開いても、役割は owner のまま
     assert client.post(f"/invites/{token}/accept", headers=A).json()["role"] == "owner"
     assert len(client.get(f"/capsules/{cid}/members", headers=A).json()) == 2
+
+
+def test_folder_has_at_most_four_participating_accounts(env):
+    client, _, _ = env
+    cid = create(client).json()["capsule_id"]
+    token = invite(client, cid).json()["token"]
+    for user in ("bob", "carol", "dave"):
+        assert client.post(f"/invites/{token}/accept", headers={"X-User-Id": user}).status_code == 200
+
+    full = client.post(f"/invites/{token}/accept", headers={"X-User-Id": "eve"})
+    assert full.status_code == 409
+    assert full.json()["error"]["code"] == "member_limit_reached"
+    assert client.get(f"/invites/{token}", headers={"X-User-Id": "eve"}).json()["members_count"] == 4
+    # 参加済みの人が同じリンクを開き直す操作は、満員でも成功する
+    assert client.post(f"/invites/{token}/accept", headers=B).status_code == 200
 
 
 def test_only_owner_can_invite(env):
@@ -120,3 +135,22 @@ def test_expires_at_is_in_the_future_by_default(env):
     expires = dt.datetime.fromisoformat(invite(client, cid).json()["expires_at"])
     days = (expires - dt.datetime.now(dt.timezone.utc)).days
     assert 13 <= days <= 14
+
+
+def test_invite_preview_is_public_but_accept_requires_login_in_cognito_mode(env):
+    client, _, settings = env
+    cid = create(client).json()["capsule_id"]
+    token = invite(client, cid).json()["token"]
+    app.dependency_overrides[deps.settings_dep] = lambda: replace(
+        settings,
+        auth_mode="cognito",
+    )
+
+    preview = client.get(f"/invites/{token}")
+    assert preview.status_code == 200
+    assert preview.json()["capsule_name"] == "成人式"
+    assert preview.json()["already_member"] is False
+
+    accepted = client.post(f"/invites/{token}/accept")
+    assert accepted.status_code == 401
+    assert accepted.json()["error"]["code"] == "login_required"

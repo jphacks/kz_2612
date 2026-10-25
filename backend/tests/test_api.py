@@ -1,4 +1,4 @@
-"""API の一連の流れ（作成 → 中身追加 → 開封 → アルバム）。姿勢推定は偽物に差し替える。"""
+"""API の一連の流れ（作成 → 写真追加 → 認証 → 閲覧）。姿勢推定は偽物に差し替える。"""
 
 import datetime as dt
 import io
@@ -15,6 +15,7 @@ from app.pose.detector import PoseExtractionError
 from app.repository import JsonItemStore, Repository
 from app.settings import Settings
 from app.storage import LocalStorage
+from app.routers.uploads import upload_prefix
 
 BASE = {
     "left_elbow": 90.0, "right_elbow": 170.0, "left_shoulder": 45.0,
@@ -51,6 +52,8 @@ def env(tmp_path):
         deps.get_storage: lambda: storage,
         deps.get_repository: lambda: repo,
         deps.get_detector: lambda: detector,
+        # 顔の判定は test_face_api.py で偽物に差し替えて試す。ここでは切っておく
+        deps.get_face_encoder: lambda: None,
     }
     storage = LocalStorage(tmp_path, "http://testserver")
     repo = Repository(JsonItemStore(None))
@@ -69,10 +72,17 @@ def upload(client, purpose: str, user: str = "alice") -> str:
     res = client.post("/uploads", json={"purpose": purpose, "content_type": "image/png"}, headers={"X-User-Id": user})
     assert res.status_code == 200, res.text
     body = res.json()
-    assert body["s3_key"].startswith(f"uploads/{user}/{purpose}/")
+    assert body["s3_key"].startswith(upload_prefix(user, purpose))
     put = client.put(body["upload_url"], content=png(), headers=body["headers"])
     assert put.status_code == 200, put.text
     return body["s3_key"]
+
+
+def test_local_upload_escapes_development_user_id_on_windows(env):
+    client, _, _ = env
+    key = upload(client, "key", user="dev:owner-test@example.com")
+    assert key.startswith(upload_prefix("dev:owner-test@example.com", "key"))
+    assert ":" not in key and "@" not in key
 
 
 def create(client, open_date=TODAY, user="alice"):
@@ -103,14 +113,16 @@ def test_full_flow(env):
     assert client.get(capsule["preview_url"]).status_code == 200
 
     h = {"X-User-Id": "alice"}
-    assert client.post(f"/capsules/{cid}/contents", json={"type": "message", "text": "10年後のみんなへ"}, headers=h).status_code == 201
+    message = client.post(f"/capsules/{cid}/contents", json={"type": "message", "text": "10年後のみんなへ"}, headers=h)
+    assert message.status_code == 422
+    assert message.json()["error"]["code"] == "validation_error"
     photo = upload(client, "content")
     assert client.post(f"/capsules/{cid}/contents", json={"type": "photo", "s3_key": photo}, headers=h).status_code == 201
 
     listed = client.get("/capsules", headers=h).json()
     assert [c["capsule_id"] for c in listed] == [cid]
     detail = client.get(f"/capsules/{cid}", headers=h).json()
-    assert detail["contents_count"] == 2
+    assert detail["contents_count"] == 1
     assert "contents" not in detail  # 開封前に中身は返さない
     res = client.get(f"/capsules/{cid}/contents", headers=h)
     assert res.status_code == 401
@@ -133,8 +145,6 @@ def test_full_flow(env):
     assert res["attempts_left"] is None
     opened = res["opened"]
     assert opened["url_expires_in"] == 60
-    texts = [c["text"] for c in opened["contents"] if c["type"] == "message"]
-    assert texts == ["10年後のみんなへ"]
     photo_url = next(c["url"] for c in opened["contents"] if c["type"] == "photo")
     assert client.get(photo_url).content == png()
 
@@ -144,14 +154,74 @@ def test_full_flow(env):
     assert res["unlock"]["token"]
     u = {**h, "X-Unlock-Token": res["unlock"]["token"]}
     assert client.get(f"/capsules/{cid}/contents", headers=h).status_code == 401  # トークンなし
-    assert len(client.get(f"/capsules/{cid}/contents", headers=u).json()["contents"]) == 2
-    album = client.get(f"/capsules/{cid}/album", headers=u).json()
-    assert len(album["entries"]) == 1
+    assert len(client.get(f"/capsules/{cid}/contents", headers=u).json()["contents"]) == 1
+    assert client.get(f"/capsules/{cid}/album", headers=u).status_code == 404
 
     # 解除後も写真を追加できる
     more = upload(client, "content")
     assert client.post(f"/capsules/{cid}/contents", json={"type": "photo", "s3_key": more}, headers=h).status_code == 201
-    assert len(client.get(f"/capsules/{cid}/contents", headers=u).json()["contents"]) == 3
+    assert len(client.get(f"/capsules/{cid}/contents", headers=u).json()["contents"]) == 2
+
+
+def test_create_with_optional_cover_and_initial_photos(env, tmp_path):
+    client, _, _ = env
+    key = upload(client, "key")
+    cover = upload(client, "cover")
+    initial = [upload(client, "content"), upload(client, "content")]
+    cover_path = tmp_path / "objects" / cover
+    content_paths = [tmp_path / "objects" / key for key in initial]
+
+    res = client.post(
+        "/capsules",
+        json={
+            "name": "夏合宿",
+            "key_photo_s3_key": key,
+            "cover_photo_s3_key": cover,
+            "initial_photo_s3_keys": initial,
+        },
+        headers={"X-User-Id": "alice"},
+    )
+    assert res.status_code == 201, res.text
+    capsule = res.json()
+    assert capsule["cover_photo_url"]
+    assert capsule["contents_count"] == 2
+    assert client.get(capsule["cover_photo_url"]).status_code == 200
+
+    listed = client.get("/capsules", headers={"X-User-Id": "alice"}).json()
+    assert listed[0]["cover_photo_url"]
+
+    unlocked = unlock(client, capsule["capsule_id"])
+    contents = client.get(f"/capsules/{capsule['capsule_id']}/contents", headers=unlocked).json()
+    assert len(contents["contents"]) == 2
+
+    assert client.delete(f"/capsules/{capsule['capsule_id']}", headers={"X-User-Id": "alice"}).status_code == 204
+    assert not cover_path.exists()
+    assert all(not path.exists() for path in content_paths)
+
+
+def test_create_without_cover_uses_plain_folder_cover(env):
+    client, _, _ = env
+    capsule = create(client).json()
+    assert capsule["cover_photo_url"] is None
+    listed = client.get("/capsules", headers={"X-User-Id": "alice"}).json()
+    assert listed[0]["cover_photo_url"] is None
+
+
+def test_initial_photos_are_limited_to_twenty(env):
+    client, _, _ = env
+    key = upload(client, "key")
+    content = upload(client, "content")
+    res = client.post(
+        "/capsules",
+        json={
+            "name": "多すぎる写真",
+            "key_photo_s3_key": key,
+            "initial_photo_s3_keys": [content] * 21,
+        },
+        headers={"X-User-Id": "alice"},
+    )
+    assert res.status_code == 422
+    assert res.json()["error"]["code"] == "validation_error"
 
 
 def unlock(client, cid, user="alice") -> dict:
@@ -165,6 +235,33 @@ def add_photo(client, cid, user="alice") -> str:
     res = client.post(f"/capsules/{cid}/contents", json={"type": "photo", "s3_key": key}, headers={"X-User-Id": user})
     assert res.status_code == 201, res.text
     return res.json()["content_id"]
+
+
+def test_authentication_photo_is_deleted_after_loading(env, tmp_path):
+    client, _, _ = env
+    cid = create(client).json()["capsule_id"]
+    key = upload(client, "attempt")
+    uploaded = tmp_path / "objects" / key
+    assert uploaded.exists()
+
+    res = client.post(
+        f"/capsules/{cid}/open",
+        json={"s3_key": key},
+        headers={"X-User-Id": "alice"},
+    )
+    assert res.status_code == 200
+    assert not uploaded.exists()
+
+
+def test_folder_accepts_at_most_twenty_photos(env):
+    client, _, _ = env
+    cid = create(client).json()["capsule_id"]
+    for _ in range(20):
+        add_photo(client, cid)
+    extra = upload(client, "content")
+    res = client.post(f"/capsules/{cid}/contents", json={"type": "photo", "s3_key": extra}, headers={"X-User-Id": "alice"})
+    assert res.status_code == 409
+    assert res.json()["error"]["code"] == "photo_limit_reached"
 
 
 def test_delete_photo(env, tmp_path):
@@ -188,7 +285,7 @@ def test_delete_photo(env, tmp_path):
     assert res.json()["error"]["code"] == "content_not_found"
 
 
-def test_only_author_or_owner_can_delete(env):
+def test_any_member_can_delete_any_photo(env):
     client, _, _ = env
     cid = create(client).json()["capsule_id"]
     token = client.post(f"/capsules/{cid}/invites", headers={"X-User-Id": "alice"}).json()["token"]
@@ -197,17 +294,68 @@ def test_only_author_or_owner_can_delete(env):
     alices = add_photo(client, cid, "alice")
     bobs = add_photo(client, cid, "bob")
 
+    # 参加者なら、作成者の写真でもほかの人の写真でも消せる
     carol = unlock(client, cid, "carol")
-    res = client.delete(f"/capsules/{cid}/contents/{bobs}", headers=carol)
+    assert client.delete(f"/capsules/{cid}/contents/{alices}", headers=carol).status_code == 204
+    assert client.delete(f"/capsules/{cid}/contents/{bobs}", headers=carol).status_code == 204
+    assert client.get(f"/capsules/{cid}/contents", headers=carol).json()["contents"] == []
+    # 参加者でない人は消せない
+    other = add_photo(client, cid, "bob")
+    res = client.delete(f"/capsules/{cid}/contents/{other}", headers={**carol, "X-User-Id": "mallory"})
     assert res.status_code == 403
-    assert res.json()["error"]["code"] == "not_author"
 
-    bob = unlock(client, cid, "bob")
-    assert client.delete(f"/capsules/{cid}/contents/{alices}", headers=bob).status_code == 403
-    assert client.delete(f"/capsules/{cid}/contents/{bobs}", headers=bob).status_code == 204
-    # 作成者は誰の写真でも消せる
-    other = add_photo(client, cid, "carol")
-    assert client.delete(f"/capsules/{cid}/contents/{other}", headers=unlock(client, cid, "alice")).status_code == 204
+
+def _objects(tmp_path):
+    return sorted(str(p.relative_to(tmp_path / "objects")).replace("\\", "/")
+                  for p in (tmp_path / "objects").rglob("*") if p.is_file())
+
+
+def test_delete_capsule_removes_everything(env, tmp_path):
+    client, detector, _ = env
+    cid = create(client).json()["capsule_id"]
+    keep = create(client).json()["capsule_id"]  # 別のフォルダは残る
+    token = client.post(f"/capsules/{cid}/invites", headers={"X-User-Id": "alice"}).json()["token"]
+    client.post(f"/invites/{token}/accept", headers={"X-User-Id": "bob"})
+    add_photo(client, cid, "alice")
+    add_photo(client, cid, "bob")
+    detector.people = [pose(0.5)]
+    open_with(client, cid)                       # 開けられなかった撮影
+    detector.people = [pose(0.3), pose(0.7)]
+    bob = unlock(client, cid, "bob")             # 開けた撮影・解除セッション
+
+    repo = app.dependency_overrides[deps.get_repository]()
+    capsule = repo.get_capsule(cid)
+    before = _objects(tmp_path)
+    assert capsule["key_photo_key"] in before and capsule["preview_key"] in before
+
+    # 作成者でなくても、参加者なら消せる
+    assert client.delete(f"/capsules/{cid}", headers={"X-User-Id": "bob"}).status_code == 204
+
+    # DynamoDB 側: このフォルダのアイテムは1つも残らない（別パーティションの招待・解除セッションも）
+    store = repo.store
+    assert store.query(f"CAPSULE#{cid}", "") == []
+    assert repo.get_invite(token) is None
+    assert repo.get_unlock_session(bob["X-Unlock-Token"]) is None
+    assert repo.list_memberships("bob") == []
+    assert [m["capsule_id"] for m in repo.list_memberships("alice")] == [keep]
+    # S3 側: 残るのは別のフォルダの鍵の写真とプレビューだけ
+    kept = repo.get_capsule(keep)
+    assert _objects(tmp_path) == sorted([kept["key_photo_key"], kept["preview_key"]])
+
+    # 消したあとは、どの API でも見つからない
+    for path in (f"/capsules/{cid}", f"/capsules/{cid}/contents"):
+        assert client.get(path, headers=bob).status_code == 404
+    assert client.get(f"/invites/{token}", headers={"X-User-Id": "carol"}).status_code == 404
+    assert client.delete(f"/capsules/{cid}", headers={"X-User-Id": "alice"}).status_code == 404
+
+
+def test_only_members_can_delete_capsule(env):
+    client, _, _ = env
+    cid = create(client).json()["capsule_id"]
+    res = client.delete(f"/capsules/{cid}", headers={"X-User-Id": "mallory"})
+    assert res.status_code == 403
+    assert res.json()["error"]["code"] == "not_member"
+    assert client.get(f"/capsules/{cid}", headers={"X-User-Id": "alice"}).status_code == 200
 
 
 def test_unlock_token_is_bound_to_user_and_capsule(env):
@@ -239,7 +387,7 @@ def test_unlock_expires(env):
     assert res.json()["error"]["code"] == "unlock_expired"
 
 
-def test_no_lock_and_no_unlock_expiry_by_default(env):
+def test_no_lock_and_twelve_hour_unlock_expiry_by_default(env):
     client, detector, _ = env
     cid = create(client).json()["capsule_id"]
     assert client.get(f"/capsules/{cid}", headers={"X-User-Id": "alice"}).json()["attempts_left"] is None
@@ -251,10 +399,11 @@ def test_no_lock_and_no_unlock_expiry_by_default(env):
         assert res.status_code == 200
         assert res.json()["attempts_left"] is None
 
-    # 解除の期限なし
+    # 解除セッションは既定で最大12時間
     detector.people = [pose(0.3), pose(0.7)]
     res = open_with(client, cid).json()
-    assert res["unlock"]["expires_at"] is None
+    expires = dt.datetime.fromisoformat(res["unlock"]["expires_at"])
+    assert dt.timedelta(hours=11, minutes=59) < expires - dt.datetime.now(dt.timezone.utc) <= dt.timedelta(hours=12)
     u = {"X-User-Id": "alice", "X-Unlock-Token": res["unlock"]["token"]}
     assert client.get(f"/capsules/{cid}/contents", headers=u).status_code == 200
 
@@ -342,7 +491,11 @@ def test_upload_not_found(env):
     client, _, _ = env
     res = client.post(
         "/capsules",
-        json={"name": "x", "open_date": TODAY.isoformat(), "key_photo_s3_key": "uploads/alice/key/missing.png"},
+        json={
+            "name": "x",
+            "open_date": TODAY.isoformat(),
+            "key_photo_s3_key": upload_prefix("alice", "key") + "missing.png",
+        },
         headers={"X-User-Id": "alice"},
     )
     assert res.status_code == 404
@@ -352,7 +505,7 @@ def test_upload_not_found(env):
 def test_tampered_upload_url_is_rejected(env):
     client, _, _ = env
     body = client.post("/uploads", json={"purpose": "key"}, headers={"X-User-Id": "alice"}).json()
-    tampered = body["upload_url"].replace("uploads/alice", "uploads/bob")
+    tampered = body["upload_url"].replace(upload_prefix("alice", "key"), upload_prefix("bob", "key"))
     assert client.put(tampered, content=png()).status_code == 403
 
 

@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import uuid
 
 from fastapi import APIRouter, Depends
@@ -21,7 +22,10 @@ EXTENSIONS = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}
 
 def upload_prefix(user_id: str, purpose: str) -> str:
     """アップロード先のキーの先頭。他人のアップロードを流用できないよう、使う側でもこの形を検査する。"""
-    return f"uploads/{user_id}/{purpose}/"
+    # ローカル開発IDは `dev:mail@example.com` の形で、`:` はWindowsのフォルダ名に使えない。
+    # メールアドレスをS3キーへ露出させないためにも、ユーザーIDは固定長のハッシュにそろえる。
+    safe_user_id = hashlib.sha256(user_id.encode("utf-8")).hexdigest()[:32]
+    return f"uploads/{safe_user_id}/{purpose}/"
 
 
 @router.post("/uploads", response_model=UploadResponse, summary="アップロード用URLを発行")
