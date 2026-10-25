@@ -24,6 +24,17 @@
 - **緑 / 赤**: CI の成功 / 失敗。赤のままでは PR をマージできないように設定する予定（後述のブランチ保護）
 - **ブランチ保護（ruleset）**: main に対するルール。PR を通すこと、CI を緑にすること、履歴を消さないことを強制する
 
+## ラベル
+
+| ラベル | 意味 |
+| --- | --- |
+| `triage` | 提案。人の確認待ち |
+| `agent-ready` | 人が確認済み。Claude に任せてよい |
+| `needs-human` | AWS の操作など、人の手作業が要る |
+| `model:sonnet` / `model:haiku` / `model:opus` | 実装を任せる Claude のモデル。ふつうの実装は Sonnet、手順どおりの単純作業は Haiku、設計やセキュリティの判断が要るものは Opus |
+| `area:*` | 触る場所（`ci`・`frontend`・`backend`・`infra`） |
+| `ux` / `pitch` | 使いやすさの改善 / 発表の準備 |
+
 ## PR の書き方
 
 - 先頭に `Closes #番号` を書く
