@@ -2,7 +2,9 @@
 
 判定ルール:
 - 人数が一致すること（PRD F-4）
-- 左から順に対応づけ、各人について
+- 全員が判定できる（体が見えている）こと
+- 一致度（全員のずれの平均から出す 0〜100）が pass_score（既定55）以上なら一致
+- 一致度のもとになるずれは、左から順に対応づけ、各人について
   - 点の位置（主）: ひじ・手首・ひざ・足首の、両肩から見た位置のずれ（肩幅を1とした距離）の平均が許容値以内
     - 当時の写真で写っていない点は比べない（自由なポーズで片手が隠れていてもよい）
     - 当時は写っていたのに今は隠れている点は、1人 max_missing_points 点まで許す（そのぶん少しずれた扱い）
@@ -286,12 +288,13 @@ def match_poses(key: list[PersonPose], attempt: list[PersonPose], config: MatchC
         return MatchResult(False, "body_not_visible", 0, _not_visible_message(not_visible, detected),
                            expected, detected, is_mirrored, people)
 
+    # 合否は画面に出す一致度そのもので決める（表示と判定を食い違わせない）
     score = _score(overall)
-    if all(r.ok for r in people):
+    if score >= config.pass_score:
         return MatchResult(True, None, score, "あの日のポーズ、そろったね！", expected, detected, is_mirrored, people)
 
     # いちばんずれている人の、いちばんずれている点（または関節）について声をかける
-    worst_person = max((r for r in people if not r.ok), key=lambda r: r.badness or 0.0)
+    worst_person = max(people, key=lambda r: r.badness or 0.0)
     candidates_hint = [(d.diff / config.point_tolerance, _point_hint(n, d)) for n, d in worst_person.points.items()]
     if config.judge_with_angles or not worst_person.points:
         candidates_hint += [(d.diff_deg / config.tolerance_deg, _joint_hint(n, d)) for n, d in worst_person.joints.items()]

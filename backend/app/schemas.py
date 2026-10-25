@@ -139,7 +139,7 @@ class MatchResultOut(BaseModel):
     ok: bool
     reason: Literal["count_mismatch", "pose_mismatch", "body_not_visible", "no_person",
                     "face_not_visible", "face_mismatch"] | None
-    score: int = Field(description="一致度ゲージ用 0〜100。許容値ちょうどで70")
+    score: int = Field(description="一致度ゲージ用 0〜100。許容値ちょうどで70。ポーズはこれが EMO_PASS_SCORE（既定55）以上で一致")
     message: str = Field(description="そのまま画面に出せる声かけ")
     expected_people: int
     detected_people: int

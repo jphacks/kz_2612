@@ -54,7 +54,7 @@
 
 ### 独自技術
 #### ハッカソンで開発した独自機能・技術
-* ポーズの照合（[backend/app/pose/matcher.py](backend/app/pose/matcher.py)、[backend/app/pose/angles.py](backend/app/pose/angles.py)）：肩幅を1として手足の位置を比べ、人数が同じで各人の平均のずれが0.35以内なら成功。失敗したときは、どの人のどの点がずれているかを返します（commit 2275bcc）。
+* ポーズの照合（[backend/app/pose/matcher.py](backend/app/pose/matcher.py)、[backend/app/pose/angles.py](backend/app/pose/angles.py)）：肩幅を1として手足の位置を比べ、人数が同じで、全員のずれから出す一致度が55%以上なら成功。失敗したときは、どの人のどの点がずれているかを返します（commit 2275bcc）。
 * 複数人の骨格推定（[backend/app/pose/rtm_detector.py](backend/app/pose/rtm_detector.py)）：YOLOX-m で人を見つけてから RTMPose-m で1人ずつ推定し、最大4人を左から順に並べます。
 * 顔の照合（[backend/app/pose/face.py](backend/app/pose/face.py)）：立ち位置ごとに、顔の記憶との類似度がしきい値以上で、ほかの人の記憶より十分よく似ているときだけ本人とみなします。開けるたびに顔の記憶を更新します（commit 2fcb906）。
 * ポーズで開ける共有フォルダのAPI（[backend/app/routers/capsules.py](backend/app/routers/capsules.py)、仕様は [docs/api.md](docs/api.md)）：解除に成功した人にだけ、そのフォルダ用の解除トークンを発行します（commit 1683644）。
