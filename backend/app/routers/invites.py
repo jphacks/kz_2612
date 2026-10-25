@@ -97,10 +97,7 @@ def get_invite(
         members_count=len(repo.list_members(capsule["capsule_id"])),
         invited_by=invite["created_by"],
         expires_at=invite["expires_at"],
-        already_member=(
-            user is not None
-            and repo.get_member(capsule["capsule_id"], user["user_id"]) is not None
-        ),
+        already_member=(user is not None and repo.get_member(capsule["capsule_id"], user["user_id"]) is not None),
     )
 
 

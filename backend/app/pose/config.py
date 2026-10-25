@@ -53,9 +53,7 @@ class MatchConfig:
             allow_mirror=_env_bool("EMO_ALLOW_MIRROR", default.allow_mirror),
             min_visibility=_env_float("EMO_MIN_VISIBILITY", default.min_visibility),
             judge_with_angles=_env_bool("EMO_JUDGE_WITH_ANGLES", default.judge_with_angles),
-            min_joints_per_person=int(
-                _env_float("EMO_MIN_JOINTS_PER_PERSON", default.min_joints_per_person)
-            ),
+            min_joints_per_person=int(_env_float("EMO_MIN_JOINTS_PER_PERSON", default.min_joints_per_person)),
             point_tolerance=_env_float("EMO_POINT_TOLERANCE", default.point_tolerance),
             max_point_diff=_env_float("EMO_MAX_POINT_DIFF", default.max_point_diff),
             max_missing_points=int(_env_float("EMO_MAX_MISSING_POINTS", default.max_missing_points)),

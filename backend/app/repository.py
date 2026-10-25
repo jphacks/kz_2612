@@ -179,11 +179,19 @@ class Repository:
 
     # Member
     def add_member(self, capsule_id: str, user_id: str, role: str, email: str | None = None) -> None:
-        self.store.put({
-            "PK": f"CAPSULE#{capsule_id}", "SK": f"MEMBER#{user_id}", "entity": "Member",
-            "GSI1PK": f"USER#{user_id}", "GSI1SK": f"CAPSULE#{capsule_id}",
-            "capsule_id": capsule_id, "user_id": user_id, "role": role, "email": email,
-        })
+        self.store.put(
+            {
+                "PK": f"CAPSULE#{capsule_id}",
+                "SK": f"MEMBER#{user_id}",
+                "entity": "Member",
+                "GSI1PK": f"USER#{user_id}",
+                "GSI1SK": f"CAPSULE#{capsule_id}",
+                "capsule_id": capsule_id,
+                "user_id": user_id,
+                "role": role,
+                "email": email,
+            }
+        )
 
     def get_member(self, capsule_id: str, user_id: str) -> dict | None:
         return _strip(self.store.get(f"CAPSULE#{capsule_id}", f"MEMBER#{user_id}"))
@@ -196,11 +204,14 @@ class Repository:
 
     # Content
     def add_content(self, content: dict) -> None:
-        self.store.put({
-            "PK": f"CAPSULE#{content['capsule_id']}",
-            "SK": f"CONTENT#{content['created_at']}#{content['content_id']}",
-            "entity": "Content", **content,
-        })
+        self.store.put(
+            {
+                "PK": f"CAPSULE#{content['capsule_id']}",
+                "SK": f"CONTENT#{content['created_at']}#{content['content_id']}",
+                "entity": "Content",
+                **content,
+            }
+        )
 
     def list_contents(self, capsule_id: str) -> list[dict]:
         return [_strip(i) for i in self.store.query(f"CAPSULE#{capsule_id}", "CONTENT#")]  # type: ignore[misc]
@@ -209,13 +220,21 @@ class Repository:
         return next((c for c in self.list_contents(capsule_id) if c["content_id"] == content_id), None)
 
     def delete_content(self, content: dict) -> None:
-        self.store.delete(f"CAPSULE#{content['capsule_id']}", f"CONTENT#{content['created_at']}#{content['content_id']}")
+        self.store.delete(
+            f"CAPSULE#{content['capsule_id']}", f"CONTENT#{content['created_at']}#{content['content_id']}"
+        )
 
     # Invite（招待リンク）。トークンだけで引けるよう、カプセルとは別のパーティションに置く
     def create_invite(self, invite: dict) -> None:
         self.store.put({"PK": f"INVITE#{invite['token']}", "SK": "META", "entity": "Invite", **invite})
-        self.store.put({"PK": f"CAPSULE#{invite['capsule_id']}", "SK": f"INVITE#{invite['token']}",
-                        "entity": "InviteRef", "token": invite["token"]})
+        self.store.put(
+            {
+                "PK": f"CAPSULE#{invite['capsule_id']}",
+                "SK": f"INVITE#{invite['token']}",
+                "entity": "InviteRef",
+                "token": invite["token"],
+            }
+        )
 
     def get_invite(self, token: str) -> dict | None:
         return _strip(self.store.get(f"INVITE#{token}", "META"))
@@ -223,8 +242,12 @@ class Repository:
     # UnlockSession（ポーズで解除してからライブラリを使える間の合言葉）
     def create_unlock_session(self, session: dict) -> None:
         self.store.put({"PK": f"SESSION#{session['token']}", "SK": "META", "entity": "UnlockSession", **session})
-        ref = {"PK": f"CAPSULE#{session['capsule_id']}", "SK": f"SESSION#{session['token']}",
-               "entity": "SessionRef", "token": session["token"]}
+        ref = {
+            "PK": f"CAPSULE#{session['capsule_id']}",
+            "SK": f"SESSION#{session['token']}",
+            "entity": "SessionRef",
+            "token": session["token"],
+        }
         if session.get("ttl"):
             ref["ttl"] = session["ttl"]
         self.store.put(ref)

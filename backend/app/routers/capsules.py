@@ -29,8 +29,8 @@ from app.deps import (
 )
 from app.errors import ApiError
 from app.pose.angles import PersonPose
-from app.pose.config import MatchConfig
 from app.pose.base import Detector, PoseExtractionError, draw_overlay, load_image
+from app.pose.config import MatchConfig
 from app.pose.face import FaceConfig, FaceEncoder, assign_faces, match_faces, new_memory, update_memory
 from app.pose.matcher import match_poses
 from app.repository import Repository
@@ -69,7 +69,7 @@ UNLOCK_ERRORS = {**ERRORS, 401: {"model": ErrorResponse}}
 
 
 def _now() -> dt.datetime:
-    return dt.datetime.now(dt.timezone.utc)
+    return dt.datetime.now(dt.UTC)
 
 
 def _today_jst() -> dt.date:
@@ -197,7 +197,9 @@ def _detail(capsule: dict, role: str, repo: Repository, storage: Storage, settin
         preview_url=storage.presign_get(capsule["preview_key"], expires) if capsule.get("preview_key") else None,
         url_expires_in=expires,
         guide=[
-            GuidePerson(position=i, angles=p["angles"], points=p.get("points", {}), face_registered=bool(p.get("faces")))
+            GuidePerson(
+                position=i, angles=p["angles"], points=p.get("points", {}), face_registered=bool(p.get("faces"))
+            )
             for i, p in enumerate(capsule["key_pose"]["people"])
         ],
         can_open_now=_is_open_day(capsule, settings) and locked_until is None,
@@ -243,8 +245,11 @@ def create_capsule(
     except PoseExtractionError as e:
         raise ApiError(422, e.code, e.message, detected_people=e.detected_people) from e
     # 鍵の写真の顔を、その人の最初の「顔の記憶」にする（顔が見えない人は、最初に開けたときの顔から覚える）
-    faces = (assign_faces(people, face_encoder.encode(image), image.width, image.height)
-             if face_encoder else [None] * len(people))
+    faces = (
+        assign_faces(people, face_encoder.encode(image), image.width, image.height)
+        if face_encoder
+        else [None] * len(people)
+    )
 
     capsule_id = uuid.uuid4().hex[:12]
     preview = io.BytesIO()
@@ -261,9 +266,12 @@ def create_capsule(
         "cover_photo_key": body.cover_photo_s3_key,
         "preview_key": preview_key,
         # 鍵として保存するのは、点の位置・関節角度と、顔の特徴の数字（顔の画像は保存しない）
-        "key_pose": {"version": 1, "people": [
-            {**p.to_dict(), "points": p.guide_points(), "faces": new_memory(f)} for p, f in zip(people, faces)
-        ]},
+        "key_pose": {
+            "version": 1,
+            "people": [
+                {**p.to_dict(), "points": p.guide_points(), "faces": new_memory(f)} for p, f in zip(people, faces)
+            ],
+        },
         "status": "locked",
         "fail_count": 0,
         "locked_until": None,
@@ -273,17 +281,28 @@ def create_capsule(
     repo.create_capsule(capsule)
     repo.add_member(capsule_id, user["user_id"], "owner", user.get("email"))
     for photo_key in body.initial_photo_s3_keys:
-        repo.add_content({
-            "capsule_id": capsule_id,
-            "content_id": uuid.uuid4().hex[:12],
-            "type": "photo",
-            "s3_key": photo_key,
-            "author_id": user["user_id"],
-            "created_at": _now().isoformat(),
-        })
-    log.info(json.dumps({"event": "capsule_created", "capsule_id": capsule_id, "people": len(people),
-                         "faces": sum(f is not None for f in faces), "initial_photos": len(body.initial_photo_s3_keys),
-                         "has_cover": bool(body.cover_photo_s3_key)}))
+        repo.add_content(
+            {
+                "capsule_id": capsule_id,
+                "content_id": uuid.uuid4().hex[:12],
+                "type": "photo",
+                "s3_key": photo_key,
+                "author_id": user["user_id"],
+                "created_at": _now().isoformat(),
+            }
+        )
+    log.info(
+        json.dumps(
+            {
+                "event": "capsule_created",
+                "capsule_id": capsule_id,
+                "people": len(people),
+                "faces": sum(f is not None for f in faces),
+                "initial_photos": len(body.initial_photo_s3_keys),
+                "has_cover": bool(body.cover_photo_s3_key),
+            }
+        )
+    )
     return _detail(capsule, "owner", repo, storage, settings)
 
 
@@ -386,12 +405,20 @@ def open_capsule(
     capsule, _ = _get_capsule_for_member(repo, capsule_id, user["user_id"])
 
     if not _is_open_day(capsule, settings):
-        raise ApiError(409, "not_open_yet", f"開けられるのは {capsule['open_date']} からだよ。その日まで楽しみにしててね",
-                       open_date=capsule["open_date"])
+        raise ApiError(
+            409,
+            "not_open_yet",
+            f"開けられるのは {capsule['open_date']} からだよ。その日まで楽しみにしててね",
+            open_date=capsule["open_date"],
+        )
     locked_until = _locked_until(capsule, settings)
     if locked_until:
-        raise ApiError(423, "locked", "たくさん試したので少しお休み。時間をおいてまた挑戦してね",
-                       locked_until=locked_until.isoformat())
+        raise ApiError(
+            423,
+            "locked",
+            "たくさん試したので少しお休み。時間をおいてまた挑戦してね",
+            locked_until=locked_until.isoformat(),
+        )
 
     image = _load_uploaded_image(
         storage,
@@ -407,8 +434,9 @@ def open_capsule(
     # ポーズが合ったら、顔も当時の人（と、これまで開けたときの顔）と比べる
     attempt_faces: list = []
     if result.ok and face_encoder:
-        attempt_faces = assign_faces(sorted(attempt_people, key=lambda p: p.hip_center_x),
-                                     face_encoder.encode(image), image.width, image.height)
+        attempt_faces = assign_faces(
+            sorted(attempt_people, key=lambda p: p.hip_center_x), face_encoder.encode(image), image.width, image.height
+        )
         if result.mirrored:
             attempt_faces = attempt_faces[::-1]  # 鍵の何番目の人に対応するかにそろえる
         memories = [p.get("faces", []) for p in capsule["key_pose"]["people"]]
@@ -443,18 +471,22 @@ def open_capsule(
     if fields:
         repo.update_capsule(capsule_id, fields)
 
-    log.info(json.dumps({
-        "event": "open_attempt",
-        "capsule_id": capsule_id,
-        "detected_people": result.detected_people,
-        "point_diffs": [p.mean_point_diff and round(p.mean_point_diff, 2) for p in result.people],
-        "face_similarity": [f["similarity"] for f in result.faces],
-        "ok": result.ok,
-        "reason": result.reason,
-        "fail_count": fail_count,
-        "locked": locked_until is not None,
-        "ms": round((time.perf_counter() - started) * 1000),
-    }))
+    log.info(
+        json.dumps(
+            {
+                "event": "open_attempt",
+                "capsule_id": capsule_id,
+                "detected_people": result.detected_people,
+                "point_diffs": [p.mean_point_diff and round(p.mean_point_diff, 2) for p in result.people],
+                "face_similarity": [f["similarity"] for f in result.faces],
+                "ok": result.ok,
+                "reason": result.reason,
+                "fail_count": fail_count,
+                "locked": locked_until is not None,
+                "ms": round((time.perf_counter() - started) * 1000),
+            }
+        )
+    )
 
     opened = unlock = None
     if result.ok:
@@ -466,8 +498,12 @@ def open_capsule(
         )
         unlock_expires = _now() + dt.timedelta(minutes=settings.unlock_minutes) if settings.unlock_minutes > 0 else None
         unlock = UnlockSession(token=secrets.token_urlsafe(24), expires_at=unlock_expires)
-        session = {"token": unlock.token, "capsule_id": capsule_id, "user_id": user["user_id"],
-                   "expires_at": unlock_expires.isoformat() if unlock_expires else None}
+        session = {
+            "token": unlock.token,
+            "capsule_id": capsule_id,
+            "user_id": user["user_id"],
+            "expires_at": unlock_expires.isoformat() if unlock_expires else None,
+        }
         if unlock_expires:
             session["ttl"] = int(unlock_expires.timestamp())
         repo.create_unlock_session(session)
@@ -503,7 +539,6 @@ def list_contents(
         contents=_content_views(repo, storage, capsule_id, expires),
         url_expires_in=expires,
     )
-
 
 
 @router.delete(
@@ -567,6 +602,15 @@ def delete_capsule(
         except Exception:  # 1つ消せなくても残りは消す（バケットは非公開なので見られることはない）
             failed += 1
             log.exception("failed to delete s3 object")
-    log.info(json.dumps({"event": "capsule_deleted", "capsule_id": capsule_id,
-                         "items": len(items), "objects": len(keys), "failed_objects": failed}))
+    log.info(
+        json.dumps(
+            {
+                "event": "capsule_deleted",
+                "capsule_id": capsule_id,
+                "items": len(items),
+                "objects": len(keys),
+                "failed_objects": failed,
+            }
+        )
+    )
     return Response(status_code=204)

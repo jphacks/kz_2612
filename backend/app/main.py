@@ -54,6 +54,7 @@ def warmup() -> dict:
 
 
 if settings.backend == "local":
+
     @app.get("/dev", include_in_schema=False)
     def dev_page() -> FileResponse:
         """1人でも試せる簡易テストページ（ローカル専用。本番のフロントではない）。"""
@@ -62,7 +63,11 @@ if settings.backend == "local":
     # ローカル開発用の S3 もどき。署名と期限は LocalStorage が検証する
     @app.put("/local-s3/{key:path}", include_in_schema=False)
     async def local_put(
-        key: str, request: Request, method: str = Query(), exp: int = Query(), sig: str = Query(),
+        key: str,
+        request: Request,
+        method: str = Query(),
+        exp: int = Query(),
+        sig: str = Query(),
         storage: LocalStorage = Depends(get_storage),
     ) -> Response:
         if method != "PUT" or not storage.verify("PUT", key, exp, sig):
@@ -75,7 +80,10 @@ if settings.backend == "local":
 
     @app.get("/local-s3/{key:path}", include_in_schema=False)
     def local_get(
-        key: str, method: str = Query(), exp: int = Query(), sig: str = Query(),
+        key: str,
+        method: str = Query(),
+        exp: int = Query(),
+        sig: str = Query(),
         storage: LocalStorage = Depends(get_storage),
     ) -> Response:
         if method != "GET" or not storage.verify("GET", key, exp, sig):

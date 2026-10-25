@@ -1,6 +1,6 @@
 """2枚の写真のポーズ一致を手元で確かめる（マイルストーン1・許容値の調整用）。
 
-    python -m app.pose.cli 当時.jpg 今.jpg [--tolerance 20] [--overlay-dir out/]
+python -m app.pose.cli 当時.jpg 今.jpg [--tolerance 20] [--overlay-dir out/]
 """
 
 from __future__ import annotations
@@ -12,8 +12,8 @@ import sys
 from dataclasses import replace
 from pathlib import Path
 
-from app.pose.config import MatchConfig
 from app.pose.base import PoseExtractionError, draw_overlay, load_image
+from app.pose.config import MatchConfig
 from app.pose.matcher import match_poses
 
 
@@ -23,8 +23,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("attempt", type=Path, help="今撮った写真")
     parser.add_argument("--tolerance", type=float, help="平均角度差の許容値（度）")
     parser.add_argument("--max-joint", type=float, help="1関節あたりのずれの上限（度）")
-    parser.add_argument("--engine", choices=["rtmpose", "mediapipe"], default=os.environ.get("EMO_POSE_ENGINE", "rtmpose"),
-                        help="姿勢推定エンジン（既定 rtmpose）")
+    parser.add_argument(
+        "--engine",
+        choices=["rtmpose", "mediapipe"],
+        default=os.environ.get("EMO_POSE_ENGINE", "rtmpose"),
+        help="姿勢推定エンジン（既定 rtmpose）",
+    )
     parser.add_argument("--detection-confidence", type=float, help="人物検出のしきい値（mediapipe のみ、既定0.2）")
     parser.add_argument("--mirror", action="store_true", help="鏡像も一致とみなす")
     parser.add_argument("--overlay-dir", type=Path, help="骨格を重ねたプレビュー画像の出力先")
@@ -43,8 +47,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.engine == "mediapipe":
         from app.pose.detector import PoseDetector
 
-        detector = PoseDetector(min_visibility=config.min_visibility, detection_confidence=args.detection_confidence,
-                                min_points_per_person=config.min_points_per_person)
+        detector = PoseDetector(
+            min_visibility=config.min_visibility,
+            detection_confidence=args.detection_confidence,
+            min_points_per_person=config.min_points_per_person,
+        )
     else:
         from app.pose.rtm_detector import RtmPoseDetector
 
@@ -55,8 +62,13 @@ def main(argv: list[str] | None = None) -> int:
     try:
         key_people = detector.extract_key(key_image)
     except PoseExtractionError as e:
-        print(json.dumps({"error": e.code, "message": e.message, "detected_people": e.detected_people},
-                         ensure_ascii=False, indent=2))
+        print(
+            json.dumps(
+                {"error": e.code, "message": e.message, "detected_people": e.detected_people},
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
         return 2
     attempt_people = detector.detect(attempt_image)
 
@@ -66,11 +78,17 @@ def main(argv: list[str] | None = None) -> int:
         draw_overlay(attempt_image, attempt_people).save(args.overlay_dir / f"{args.attempt.stem}_attempt.png")
 
     result = match_poses(key_people, attempt_people, config)
-    print(json.dumps({
-        "key": [p.to_dict() for p in key_people],
-        "attempt": [p.to_dict() for p in attempt_people],
-        "result": result.to_dict(),
-    }, ensure_ascii=False, indent=2))
+    print(
+        json.dumps(
+            {
+                "key": [p.to_dict() for p in key_people],
+                "attempt": [p.to_dict() for p in attempt_people],
+                "result": result.to_dict(),
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
     return 0 if result.ok else 1
 
 

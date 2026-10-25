@@ -9,8 +9,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Sequence
 
 import numpy as np
 
@@ -36,22 +36,34 @@ JOINTS: dict[str, tuple[int, int, int]] = {
 SHOULDER_JOINTS = ("left_shoulder", "right_shoulder")
 
 GUIDE_POINTS: dict[str, int] = {
-    "left_shoulder": L_SHOULDER, "right_shoulder": R_SHOULDER,
-    "left_elbow": L_ELBOW, "right_elbow": R_ELBOW,
-    "left_wrist": L_WRIST, "right_wrist": R_WRIST,
-    "left_hip": L_HIP, "right_hip": R_HIP,
-    "left_knee": L_KNEE, "right_knee": R_KNEE,
-    "left_ankle": L_ANKLE, "right_ankle": R_ANKLE,
+    "left_shoulder": L_SHOULDER,
+    "right_shoulder": R_SHOULDER,
+    "left_elbow": L_ELBOW,
+    "right_elbow": R_ELBOW,
+    "left_wrist": L_WRIST,
+    "right_wrist": R_WRIST,
+    "left_hip": L_HIP,
+    "right_hip": R_HIP,
+    "left_knee": L_KNEE,
+    "right_knee": R_KNEE,
+    "left_ankle": L_ANKLE,
+    "right_ankle": R_ANKLE,
 }
 
 # 位置を比べる点（両肩の中心が原点、肩幅が1）
 REL_POINTS: dict[str, int] = {
-    "left_elbow": L_ELBOW, "right_elbow": R_ELBOW,
-    "left_wrist": L_WRIST, "right_wrist": R_WRIST,
-    "left_knee": L_KNEE, "right_knee": R_KNEE,
-    "left_ankle": L_ANKLE, "right_ankle": R_ANKLE,
+    "left_elbow": L_ELBOW,
+    "right_elbow": R_ELBOW,
+    "left_wrist": L_WRIST,
+    "right_wrist": R_WRIST,
+    "left_knee": L_KNEE,
+    "right_knee": R_KNEE,
+    "left_ankle": L_ANKLE,
+    "right_ankle": R_ANKLE,
 }
-MIRROR_POINT = {name: name.replace("left_", "@").replace("right_", "left_").replace("@", "right_") for name in REL_POINTS}
+MIRROR_POINT = {
+    name: name.replace("left_", "@").replace("right_", "left_").replace("@", "right_") for name in REL_POINTS
+}
 
 # 鏡像のときに入れ替わる関節
 MIRROR_JOINT = {
@@ -114,7 +126,7 @@ class PersonPose:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "PersonPose":
+    def from_dict(cls, data: dict) -> PersonPose:
         return cls(
             angles={k: (None if v is None else float(v)) for k, v in data["angles"].items()},
             hip_center_x=float(data["hip_center_x"]),
@@ -176,7 +188,9 @@ def person_pose_from_landmarks(
     else:
         hip_center_x = (landmarks[L_HIP].x + landmarks[R_HIP].x) / 2
     return PersonPose(
-        angles=angles, hip_center_x=hip_center_x, rel=_rel_points(landmarks, point, min_visibility),
+        angles=angles,
+        hip_center_x=hip_center_x,
+        rel=_rel_points(landmarks, point, min_visibility),
         landmarks=list(landmarks),
     )
 

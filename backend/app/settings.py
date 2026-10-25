@@ -51,7 +51,7 @@ class Settings:
     public_base_url: str = "http://localhost:8000"
 
     @classmethod
-    def from_env(cls) -> "Settings":
+    def from_env(cls) -> Settings:
         d = cls()
         return cls(
             backend=_env("EMO_BACKEND", d.backend),

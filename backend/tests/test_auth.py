@@ -4,21 +4,23 @@ from app.deps import _gateway_user
 
 
 def test_gateway_user_reads_verified_jwt_claims():
-    request = Request({
-        "type": "http",
-        "aws.event": {
-            "requestContext": {
-                "authorizer": {
-                    "jwt": {
-                        "claims": {
-                            "sub": "google-user-1",
-                            "email": "member@example.com",
+    request = Request(
+        {
+            "type": "http",
+            "aws.event": {
+                "requestContext": {
+                    "authorizer": {
+                        "jwt": {
+                            "claims": {
+                                "sub": "google-user-1",
+                                "email": "member@example.com",
+                            }
                         }
                     }
                 }
-            }
-        },
-    })
+            },
+        }
+    )
 
     assert _gateway_user(request) == {
         "user_id": "google-user-1",

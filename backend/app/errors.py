@@ -32,9 +32,11 @@ def install_error_handlers(app: FastAPI) -> None:
     async def _validation_error(_: Request, e: RequestValidationError) -> JSONResponse:
         return JSONResponse(
             status_code=422,
-            content={"error": {
-                "code": "validation_error",
-                "message": "入力内容を確認してね",
-                "details": [{"loc": list(err["loc"]), "msg": err["msg"]} for err in e.errors()],
-            }},
+            content={
+                "error": {
+                    "code": "validation_error",
+                    "message": "入力内容を確認してね",
+                    "details": [{"loc": list(err["loc"]), "msg": err["msg"]} for err in e.errors()],
+                }
+            },
         )

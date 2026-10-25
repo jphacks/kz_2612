@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # ジョブ名はブランチ保護の必須チェックに使うので変えない
+  frontend:
+    name: frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      # pnpm の版は package.json の packageManager から読む
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          # store-dir は .npmrc で .pnpm-store に固定してある（pnpm store path が同じ場所を返す）
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm exec tsc -b
+      - run: pnpm test
+      - run: pnpm build
+
+  backend:
+    name: backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12" # Lambda のイメージに合わせる
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
+            backend/requirements-nodeps.txt
+      # 2段階で入れる（rtmlib の opencv-python が mediapipe の opencv-contrib-python と衝突するため）
+      - run: pip install -r requirements-dev.txt
+      - run: pip install --no-deps -r requirements-nodeps.txt
+      - run: ruff check
+      - run: ruff format --check
+      - run: pytest

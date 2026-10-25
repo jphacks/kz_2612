@@ -13,13 +13,17 @@ from app.main import app
 from app.pose.angles import PersonPose
 from app.pose.detector import PoseExtractionError
 from app.repository import JsonItemStore, Repository
+from app.routers.uploads import upload_prefix
 from app.settings import Settings
 from app.storage import LocalStorage
-from app.routers.uploads import upload_prefix
 
 BASE = {
-    "left_elbow": 90.0, "right_elbow": 170.0, "left_shoulder": 45.0,
-    "right_shoulder": 120.0, "left_knee": 175.0, "right_knee": 160.0,
+    "left_elbow": 90.0,
+    "right_elbow": 170.0,
+    "left_shoulder": 45.0,
+    "right_shoulder": 120.0,
+    "left_knee": 175.0,
+    "right_knee": 160.0,
 }
 TODAY = dt.datetime.now(dt.timezone(dt.timedelta(hours=9))).date()
 
@@ -117,7 +121,9 @@ def test_full_flow(env):
     assert message.status_code == 422
     assert message.json()["error"]["code"] == "validation_error"
     photo = upload(client, "content")
-    assert client.post(f"/capsules/{cid}/contents", json={"type": "photo", "s3_key": photo}, headers=h).status_code == 201
+    assert (
+        client.post(f"/capsules/{cid}/contents", json={"type": "photo", "s3_key": photo}, headers=h).status_code == 201
+    )
 
     listed = client.get("/capsules", headers=h).json()
     assert [c["capsule_id"] for c in listed] == [cid]
@@ -163,7 +169,9 @@ def test_full_flow(env):
 
     # 解除後も写真を追加できる
     more = upload(client, "content")
-    assert client.post(f"/capsules/{cid}/contents", json={"type": "photo", "s3_key": more}, headers=h).status_code == 201
+    assert (
+        client.post(f"/capsules/{cid}/contents", json={"type": "photo", "s3_key": more}, headers=h).status_code == 201
+    )
     assert len(client.get(f"/capsules/{cid}/contents", headers=u).json()["contents"]) == 2
 
 
@@ -263,7 +271,9 @@ def test_folder_accepts_at_most_twenty_photos(env):
     for _ in range(20):
         add_photo(client, cid)
     extra = upload(client, "content")
-    res = client.post(f"/capsules/{cid}/contents", json={"type": "photo", "s3_key": extra}, headers={"X-User-Id": "alice"})
+    res = client.post(
+        f"/capsules/{cid}/contents", json={"type": "photo", "s3_key": extra}, headers={"X-User-Id": "alice"}
+    )
     assert res.status_code == 409
     assert res.json()["error"]["code"] == "photo_limit_reached"
 
@@ -310,8 +320,11 @@ def test_any_member_can_delete_any_photo(env):
 
 
 def _objects(tmp_path):
-    return sorted(str(p.relative_to(tmp_path / "objects")).replace("\\", "/")
-                  for p in (tmp_path / "objects").rglob("*") if p.is_file())
+    return sorted(
+        str(p.relative_to(tmp_path / "objects")).replace("\\", "/")
+        for p in (tmp_path / "objects").rglob("*")
+        if p.is_file()
+    )
 
 
 def test_delete_capsule_removes_everything(env, tmp_path):
@@ -323,9 +336,9 @@ def test_delete_capsule_removes_everything(env, tmp_path):
     add_photo(client, cid, "alice")
     add_photo(client, cid, "bob")
     detector.people = [pose(0.5)]
-    open_with(client, cid)                       # 開けられなかった撮影
+    open_with(client, cid)  # 開けられなかった撮影
     detector.people = [pose(0.3), pose(0.7)]
-    bob = unlock(client, cid, "bob")             # 開けた撮影・解除セッション
+    bob = unlock(client, cid, "bob")  # 開けた撮影・解除セッション
 
     repo = app.dependency_overrides[deps.get_repository]()
     capsule = repo.get_capsule(cid)
@@ -407,7 +420,7 @@ def test_no_lock_and_twelve_hour_unlock_expiry_by_default(env):
     detector.people = [pose(0.3), pose(0.7)]
     res = open_with(client, cid).json()
     expires = dt.datetime.fromisoformat(res["unlock"]["expires_at"])
-    assert dt.timedelta(hours=11, minutes=59) < expires - dt.datetime.now(dt.timezone.utc) <= dt.timedelta(hours=12)
+    assert dt.timedelta(hours=11, minutes=59) < expires - dt.datetime.now(dt.UTC) <= dt.timedelta(hours=12)
     u = {"X-User-Id": "alice", "X-Unlock-Token": res["unlock"]["token"]}
     assert client.get(f"/capsules/{cid}/contents", headers=u).status_code == 200
 

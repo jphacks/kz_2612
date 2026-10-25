@@ -41,8 +41,17 @@ def test_blank_image_has_no_key(detector):
 
 def test_key_without_measurable_joints_is_rejected(detector, monkeypatch):
     # 顔と肩だけの写真（ひじ・手首が写っていない）は鍵にできない
-    bust = PersonPose(angles={"left_elbow": None, "right_elbow": None, "left_shoulder": None,
-                              "right_shoulder": None, "left_knee": None, "right_knee": None}, hip_center_x=0.5)
+    bust = PersonPose(
+        angles={
+            "left_elbow": None,
+            "right_elbow": None,
+            "left_shoulder": None,
+            "right_shoulder": None,
+            "left_knee": None,
+            "right_knee": None,
+        },
+        hip_center_x=0.5,
+    )
     monkeypatch.setattr(detector, "detect", lambda image: [bust])
     with pytest.raises(PoseExtractionError) as e:
         detector.extract_key(Image.new("RGB", (64, 64)))
@@ -73,19 +82,19 @@ def _fake_rtm(keypoints, scores, min_score=0.5):
 def _body_points(w, h):
     """COCO17点。上半身は画像の中、腰から下は下端の外か下端すれすれ（胸から上の写真を想定）。"""
     k = np.zeros((17, 2))
-    k[5], k[6] = (0.6 * w, 0.4 * h), (0.4 * w, 0.4 * h)      # 肩
-    k[7], k[8] = (0.65 * w, 0.7 * h), (0.35 * w, 0.7 * h)    # ひじ
-    k[9], k[10] = (0.7 * w, 0.5 * h), (0.3 * w, 0.5 * h)     # 手首
+    k[5], k[6] = (0.6 * w, 0.4 * h), (0.4 * w, 0.4 * h)  # 肩
+    k[7], k[8] = (0.65 * w, 0.7 * h), (0.35 * w, 0.7 * h)  # ひじ
+    k[9], k[10] = (0.7 * w, 0.5 * h), (0.3 * w, 0.5 * h)  # 手首
     k[11], k[12] = (0.55 * w, 1.02 * h), (0.45 * w, 1.02 * h)  # 腰（画像の外）
     k[13], k[14] = (0.55 * w, 0.97 * h), (0.45 * w, 0.96 * h)  # ひざ（下端に寄せた推測）
-    k[15], k[16] = (0.5 * w, 0.94 * h), (0.45 * w, 0.89 * h)   # 足首（同上）
+    k[15], k[16] = (0.5 * w, 0.94 * h), (0.45 * w, 0.89 * h)  # 足首（同上）
     return k
 
 
 def test_rtm_ignores_out_of_frame_and_low_score_points():
     w, h = 1000, 400
     scores = np.full(17, 0.9)
-    scores[11:13] = 0.8   # 腰は画像の外なのに自信あり
+    scores[11:13] = 0.8  # 腰は画像の外なのに自信あり
     scores[13:15] = 0.45  # 画面外のひざを下端に寄せた推測
     scores[15:17] = 0.3
     person = _fake_rtm(_body_points(w, h), scores).detect(Image.new("RGB", (w, h)))[0]

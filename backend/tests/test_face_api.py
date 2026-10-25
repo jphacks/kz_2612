@@ -5,7 +5,7 @@ from app.main import app
 from app.pose.angles import Landmark, PersonPose
 from app.pose.face import Face, FaceConfig
 from tests.test_api import BASE, create, env, open_with  # noqa: F401  (env は fixture)
-from tests.test_face import A, A_OLDER, B, STRANGER
+from tests.test_face import A_OLDER, STRANGER, A, B
 
 SIZE = 64  # テストで上げる画像（白い PNG）の大きさ
 
@@ -24,8 +24,11 @@ class FakeFaceEncoder:
 
     def encode(self, image):
         xs = [0.3, 0.7]
-        return [Face(box=(x * SIZE - 4, 0.3 * SIZE - 4, 8, 8), embedding=e)
-                for x, e in zip(xs, self.embeddings) if e is not None]
+        return [
+            Face(box=(x * SIZE - 4, 0.3 * SIZE - 4, 8, 8), embedding=e)
+            for x, e in zip(xs, self.embeddings)
+            if e is not None
+        ]
 
 
 def setup(env):

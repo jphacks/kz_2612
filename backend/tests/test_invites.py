@@ -40,7 +40,9 @@ def test_invite_and_join(env):
     # 参加後はカプセルが一覧に出て、中身を追加できる
     assert [c["capsule_id"] for c in client.get("/capsules", headers=B).json()] == [cid]
     assert client.get(f"/capsules/{cid}", headers=B).json()["role"] == "member"
-    res = client.post(f"/capsules/{cid}/contents", json={"type": "photo", "s3_key": upload(client, "content", "bob")}, headers=B)
+    res = client.post(
+        f"/capsules/{cid}/contents", json={"type": "photo", "s3_key": upload(client, "content", "bob")}, headers=B
+    )
     assert res.status_code == 201
 
     members = client.get(f"/capsules/{cid}/members", headers=B).json()
@@ -133,7 +135,7 @@ def test_expires_at_is_in_the_future_by_default(env):
     client, _, _ = env
     cid = create(client).json()["capsule_id"]
     expires = dt.datetime.fromisoformat(invite(client, cid).json()["expires_at"])
-    days = (expires - dt.datetime.now(dt.timezone.utc)).days
+    days = (expires - dt.datetime.now(dt.UTC)).days
     assert 13 <= days <= 14
 
 
