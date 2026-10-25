@@ -4,7 +4,7 @@ import { useState, type CSSProperties } from 'react'
 export type PosePoints = Record<string, [number, number] | null>
 
 // 星座の線: 肩・腕・胴・脚
-const BONES: Array<[string, string]> = [
+export const BONES: Array<[string, string]> = [
   ['left_shoulder', 'right_shoulder'],
   ['left_shoulder', 'left_elbow'], ['left_elbow', 'left_wrist'],
   ['right_shoulder', 'right_elbow'], ['right_elbow', 'right_wrist'],

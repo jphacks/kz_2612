@@ -202,6 +202,8 @@ test('解除: カメラ（撮影ボタン）', async ({ page }, info) => {
   await expect(page.getByRole('button', { name: '撮影する' })).toBeEnabled({
     timeout: 15_000,
   })
+  // お手本（鍵の写真のポーズの白い線）は、MoveNet を待たずに出ている（この検査では MoveNet は読み込めない）
+  await expect(page.locator('.key-pose-guide__dot').first()).toBeVisible()
   await check(page, info, '08-camera', {
     targets: [page.getByRole('button', { name: '撮影する' })],
     viewKnown: { issue: '#31', projects: ['w375'] },
