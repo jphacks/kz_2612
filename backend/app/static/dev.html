@@ -97,12 +97,6 @@
     <div class="grid" id="photoPreview"></div>
     <button id="photoBtn">写真を入れる</button>
     <div class="status" id="photoStatus"></div>
-    <details style="margin-top:12px">
-      <summary class="status" style="cursor:pointer">ひとことメッセージも入れる（任意）</summary>
-      <textarea id="letter" rows="2" style="margin-top:6px">また集まろうね</textarea>
-      <button class="secondary" id="letterBtn">メッセージを入れる</button>
-      <div class="status" id="letterStatus"></div>
-    </details>
     <label style="margin-top:16px">メンバー</label>
     <div class="status" id="members" style="margin-top:0"></div>
     <button class="secondary" id="inviteBtn">招待リンクを作る</button>
@@ -132,17 +126,13 @@
 
   <section id="openedSec" class="hidden">
     <h2>④ 開封！</h2>
-    <div class="row">
-      <div><img id="thenImg" class="photo" alt="当時"><div class="caption">あの日</div></div>
-      <div><img id="nowImg" class="photo" alt="今"><div class="caption">今日</div></div>
-    </div>
+    <div><img id="thenImg" class="photo" alt="鍵写真"><div class="caption">鍵写真</div></div>
   </section>
 
   <section id="librarySec" class="hidden">
     <h2>⑤ 写真ライブラリ</h2>
     <p class="lead" style="margin:0" id="unlockInfo"></p>
     <div class="grid" id="library"></div>
-    <div class="letters" id="letters"></div>
     <label>写真を追加</label>
     <input id="addFile" type="file" accept="image/*" multiple>
     <button id="addBtn">追加する</button>
@@ -343,7 +333,7 @@ $("capSelect").onchange = (e) => loadCapsule(e.target.value);
 // 参加者なら誰でも消せる。鍵の写真・中身・認証まわりのデータがすべて消える
 $("deleteCapBtn").onclick = async () => {
   if (!current) return;
-  if (!confirm(`「${current.name}」を削除しますか？\n鍵の写真・入れた写真・メッセージ・認証の記録がすべて消え、元に戻せません。メンバー全員から見えなくなります。`)) return;
+  if (!confirm(`「${current.name}」を削除しますか？\n鍵の写真・入れた写真・顔の特徴量がすべて消え、元に戻せません。メンバー全員から見えなくなります。`)) return;
   try {
     const res = await fetch(`${API}/capsules/${current.capsule_id}`, { method: "DELETE", headers: headers() });
     if (!res.ok) throw new Error((await res.json()).error.message);
@@ -354,14 +344,6 @@ $("deleteCapBtn").onclick = async () => {
   } catch (e) { $("deleteCapStatus").innerHTML = `<span class="error">${e.message}</span>`; }
 };
 
-$("letterBtn").onclick = async () => {
-  const st = $("letterStatus");
-  try {
-    await api(`/capsules/${$("capSelect").value}/contents`, { method: "POST", body: JSON.stringify({ type: "message", text: $("letter").value }) });
-    st.textContent = "メッセージを入れました（ロックを解除すると見られます）";
-    await loadCapsule($("capSelect").value);
-  } catch (e) { st.innerHTML = `<span class="error">${e.message}</span>`; }
-};
 
 // 選んだ写真をアップロード前に小さく並べて見せる（端末の中だけで表示。まだ送っていない）
 $("photoFiles").onchange = () => {
@@ -441,7 +423,7 @@ function showResult(res) {
       faceChip((r.faces || []).find(f => f.position === p.position))}</div>`).join("");
   if (res.ok) {
     const o = res.opened;
-    $("thenImg").src = o.key_photo_url; $("nowImg").src = o.attempt_photo_url;
+    $("thenImg").src = o.key_photo_url;
     $("openedSec").classList.remove("hidden");
     unlockToken = res.unlock.token;
     $("unlockInfo").textContent = res.unlock.expires_at
@@ -455,7 +437,6 @@ function showResult(res) {
 
 // ライブラリ：解除で受け取ったトークンを X-Unlock-Token に付ける
 let unlockToken = null;
-const esc = (t) => t.replace(/[&<>"]/g, s => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[s]);
 function libApi(path, opts = {}) {
   return fetch(API + path, { ...opts, headers: { ...headers(), "X-Unlock-Token": unlockToken || "" } }).then(async (res) => {
     if (res.status === 204) return null;
@@ -471,7 +452,6 @@ function renderLibrary(contents) {
   $("library").innerHTML = photos.map(c => `
     <div class="tile"><img src="${c.url}" alt=""><button data-id="${c.content_id}">削除</button></div>`).join("")
     || `<div class="status">写真はまだありません</div>`;
-  $("letters").innerHTML = contents.filter(c => c.type === "message").map(c => `<div class="letter">${esc(c.text)}</div>`).join("");
 }
 
 async function reloadLibrary() {

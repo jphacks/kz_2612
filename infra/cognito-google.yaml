@@ -1,0 +1,150 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Google sign-in with Cognito for the web time capsule
+
+Parameters:
+  ApiId:
+    Type: String
+    Description: Existing API Gateway HTTP API id
+  ApiIntegrationId:
+    Type: String
+    Description: Existing Lambda integration id of the HTTP API
+  GoogleClientId:
+    Type: String
+  GoogleClientSecret:
+    Type: String
+    NoEcho: true
+  FrontendUrl:
+    Type: String
+    Description: Amplify origin without a trailing slash
+  LocalFrontendUrl:
+    Type: String
+    Default: http://localhost:5173
+  DomainPrefix:
+    Type: String
+    Description: Globally unique Cognito domain prefix
+
+Resources:
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: emo-timecapsule-users
+      AutoVerifiedAttributes:
+        - email
+      UsernameConfiguration:
+        CaseSensitive: false
+      Schema:
+        - Name: email
+          AttributeDataType: String
+          Mutable: true
+          Required: true
+        - Name: name
+          AttributeDataType: String
+          Mutable: true
+          Required: false
+
+  GoogleIdentityProvider:
+    Type: AWS::Cognito::UserPoolIdentityProvider
+    Properties:
+      UserPoolId: !Ref UserPool
+      ProviderName: Google
+      ProviderType: Google
+      ProviderDetails:
+        client_id: !Ref GoogleClientId
+        client_secret: !Ref GoogleClientSecret
+        authorize_scopes: openid email profile
+      AttributeMapping:
+        email: email
+        name: name
+        username: sub
+
+  WebClient:
+    Type: AWS::Cognito::UserPoolClient
+    DependsOn: GoogleIdentityProvider
+    Properties:
+      UserPoolId: !Ref UserPool
+      ClientName: emo-timecapsule-web
+      GenerateSecret: false
+      PreventUserExistenceErrors: ENABLED
+      SupportedIdentityProviders:
+        - Google
+      AllowedOAuthFlowsUserPoolClient: true
+      AllowedOAuthFlows:
+        - code
+      AllowedOAuthScopes:
+        - openid
+        - email
+        - profile
+      CallbackURLs:
+        - !Sub ${FrontendUrl}/auth/callback
+        - !Sub ${LocalFrontendUrl}/auth/callback
+      LogoutURLs:
+        - !Ref FrontendUrl
+        - !Ref LocalFrontendUrl
+      AccessTokenValidity: 60
+      IdTokenValidity: 60
+      RefreshTokenValidity: 30
+      TokenValidityUnits:
+        AccessToken: minutes
+        IdToken: minutes
+        RefreshToken: days
+
+  UserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain: !Ref DomainPrefix
+      UserPoolId: !Ref UserPool
+
+  JwtAuthorizer:
+    Type: AWS::ApiGatewayV2::Authorizer
+    Properties:
+      ApiId: !Ref ApiId
+      Name: emo-cognito
+      AuthorizerType: JWT
+      IdentitySource:
+        - '$request.header.Authorization'
+      JwtConfiguration:
+        Audience:
+          - !Ref WebClient
+        Issuer: !Sub https://cognito-idp.${AWS::Region}.amazonaws.com/${UserPool}
+
+  DefaultRouteAuth:
+    Type: AWS::ApiGatewayV2::ApiGatewayManagedOverrides
+    Properties:
+      ApiId: !Ref ApiId
+      Route:
+        AuthorizationType: JWT
+        AuthorizerId: !Ref JwtAuthorizer
+
+  PublicHealthRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref ApiId
+      RouteKey: GET /health
+      AuthorizationType: NONE
+      Target: !Sub integrations/${ApiIntegrationId}
+
+  PublicInvitePreviewRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref ApiId
+      RouteKey: GET /invites/{token}
+      AuthorizationType: NONE
+      Target: !Sub integrations/${ApiIntegrationId}
+
+  PublicOptionsRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref ApiId
+      RouteKey: OPTIONS /{proxy+}
+      AuthorizationType: NONE
+      Target: !Sub integrations/${ApiIntegrationId}
+
+Outputs:
+  UserPoolId:
+    Value: !Ref UserPool
+  ClientId:
+    Value: !Ref WebClient
+  CognitoDomain:
+    Value: !Sub https://${DomainPrefix}.auth.${AWS::Region}.amazoncognito.com
+  Issuer:
+    Value: !Sub https://cognito-idp.${AWS::Region}.amazonaws.com/${UserPool}

@@ -13,7 +13,7 @@ import secrets
 
 from fastapi import APIRouter, Depends
 
-from app.deps import current_user, get_repository, settings_dep
+from app.deps import current_user, get_repository, optional_user, settings_dep
 from app.errors import ApiError
 from app.repository import Repository
 from app.routers.capsules import ERRORS, _days_until, _get_capsule_for_member, _now, _open_date, _parse_dt, _summary
@@ -22,10 +22,12 @@ from app.settings import Settings
 
 router = APIRouter(tags=["invites"])
 log = logging.getLogger("emo")
+MAX_MEMBERS = 4
 
 INVITE_ERRORS = {
     404: {"model": ErrorResponse},
     410: {"model": ErrorResponse},
+    409: {"model": ErrorResponse},
 }
 
 
@@ -81,7 +83,7 @@ def create_invite(
 )
 def get_invite(
     token: str,
-    user: dict = Depends(current_user),
+    user: dict | None = Depends(optional_user),
     repo: Repository = Depends(get_repository),
 ) -> InvitePreview:
     invite, capsule = _valid_invite(repo, token)
@@ -95,7 +97,10 @@ def get_invite(
         members_count=len(repo.list_members(capsule["capsule_id"])),
         invited_by=invite["created_by"],
         expires_at=invite["expires_at"],
-        already_member=repo.get_member(capsule["capsule_id"], user["user_id"]) is not None,
+        already_member=(
+            user is not None
+            and repo.get_member(capsule["capsule_id"], user["user_id"]) is not None
+        ),
     )
 
 
@@ -116,6 +121,8 @@ def accept_invite(
     if existing:
         # 2回押しても、作成者が自分のリンクを開いてもエラーにしない
         return _summary(capsule, existing["role"])
+    if len(repo.list_members(capsule_id)) >= MAX_MEMBERS:
+        raise ApiError(409, "member_limit_reached", "このフォルダは4人参加しているため、これ以上参加できないよ")
     # 開封済みでも参加できる。中身を見るにはポーズでの解除が要るので、リンクだけでは見られない
 
     repo.add_member(capsule_id, user["user_id"], "member", user.get("email"))
