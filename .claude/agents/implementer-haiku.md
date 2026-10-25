@@ -14,10 +14,18 @@ model: haiku
 4. 手元で確かめる
    - フロント: `npx -y pnpm@10 install --frozen-lockfile` → `lint` / `exec tsc -b` / `test` / `build`
    - バック: `backend/.venv` がなければ作る。`pip install -r requirements-dev.txt` → `pip install --no-deps -r requirements-nodeps.txt` → `pytest`
-5. 受け入れ条件の「わざと壊すと赤になる」は手元で一時的に壊して確かめ、元に戻す。結果は PR 本文に書く（壊したコミットは残さない）
-6. push して PR を作る。本文の先頭に `Closes #<番号>`、続けて変更点・確認方法・受け入れ条件のチェック結果を書き、最後に `🤖 Generated with [Claude Code](https://claude.com/claude-code)` を付ける
+5. 受け入れ条件の「わざと壊すと赤になる」は手元で一時的に壊して確かめ、元に戻す。壊したコードは push しない。何をどう壊し、どの検査がどう失敗したかを PR 本文に書く
+6. push して PR を作る。本文は下の「PR の書き方」に従い、最後に `🤖 Generated with [Claude Code](https://claude.com/claude-code)` を付ける
 7. `gh pr checks <PR> --watch` で CI を待つ。赤なら直して push する。**2回直しても赤なら止めて報告する**
 8. マージはしない
+
+## PR の書き方
+読み手は「コードは書けるが、CI・AWS は初めて」の人。
+- 先頭に `Closes #<番号>`
+- `## 前提知識`: この PR を読むのに必要な用語を、1〜2文ずつ「何のためにあるか」から説明する
+- `## 何が変わるか`: ファイル名を並べるのではなく、使う人から見た変化を書く（例:「PR を作るとこの検査が自動で走る」）。チームメイトへの影響（コンフリクトしやすい、手順が変わるなど）は ⚠️ を付けて書く
+- `## 確認したこと`: 受け入れ条件ごとの結果を表にする。確かめられなかったことは、確かめられなかったとそのまま書く
+- 専門用語や略語は、初めて出たところで正式名称と一言の説明を添える
 
 ## 報告（最終メッセージ）
 - PR の URL と CI の状態
