@@ -5,6 +5,13 @@
 **カプセル（画面ではフォルダ）は「ポーズで開ける共有アルバム」。** フォルダに入るたびにみんなでポーズを揃えてロックを解除し、解除している間だけ写真を見る・追加する・削除する（Figma の画面フローに合わせた）。
 サーバーを起動すると `http://localhost:8000/docs` で同じ内容を試せる（OpenAPI / Swagger UI）。
 
+**フロントの型は `docs/openapi.json` から自動で作っている**（`src/api/generated.ts`。`src/api/types.ts` はその別名）。バックの API（`backend/app/schemas.py` やルーター）を変えたら、次の2つを実行してコミットする。忘れると CI の backend ジョブが落ちる。
+
+```bash
+python backend/scripts/export_openapi.py   # docs/openapi.json を作り直す（モデル・AWS は不要）
+pnpm gen:api                               # src/api/generated.ts を作り直す
+```
+
 - [フロントエンド向け](#フロントエンド向け)
 - [AWS 向け](#aws-向け)
 - [未実装・今後](#未実装今後)

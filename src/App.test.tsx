@@ -100,6 +100,7 @@ describe('App routes', () => {
         expected_people: 2,
         detected_people: 2,
         mirrored: false,
+        people: [],
         faces: [
           {
             position: 0,

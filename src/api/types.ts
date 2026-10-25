@@ -1,125 +1,30 @@
-export type CapsuleRole = 'owner' | 'member'
+import type { components } from './generated'
 
-export interface CapsuleSummary {
-  capsule_id: string
-  name: string
-  open_date: string | null
-  days_until_open: number | null
-  status: 'locked' | 'opened'
-  people_count: number
-  role: CapsuleRole
-  /** 鍵の写真の各人の体の点（左から順）。写真は見せずにポーズの形だけを出す用。古いバックエンドだと無い */
-  poses?: Array<Record<string, [number, number] | null>>
-  cover_photo_url: string | null
-}
+// API の型は backend の OpenAPI（docs/openapi.json）から自動で作っている（generated.ts）。
+// ここでは画面側で使いやすい名前の別名を付ける。API の型は手で書き足さない。
+type Schemas = components['schemas']
 
+export type CapsuleSummary = Schemas['CapsuleSummary']
+export type CapsuleRole = CapsuleSummary['role']
+export type GuidePerson = Schemas['GuidePerson']
+export type CapsuleDetail = Schemas['CapsuleDetail']
+export type UploadTicket = Schemas['UploadResponse']
+export type ContentView = Schemas['ContentView']
+export type OpenedContents = Schemas['OpenedContents']
+export type FacePersonResult = Schemas['FacePersonOut']
+export type MatchResult = Schemas['MatchResultOut']
+export type OpenFailureReason = MatchResult['reason']
+export type OpenResponse = Schemas['OpenResponse']
+export type MemberView = Schemas['MemberOut']
+export type InviteCreated = Schemas['InviteCreated']
+export type InvitePreview = Schemas['InvitePreview']
+
+// 以下は画面だけで使う型（API の入出力そのものではない）
 export interface CreateCapsuleInput {
   name: string
   keyPhotoS3Key: string
   coverPhotoS3Key?: string
   initialPhotoS3Keys?: string[]
-}
-
-export interface GuidePerson {
-  position: number
-  angles: Record<string, number | null>
-  points: Record<string, [number, number] | null>
-  face_registered: boolean
-}
-
-export interface CapsuleDetail extends CapsuleSummary {
-  key_photo_url: string
-  preview_url: string | null
-  url_expires_in: number
-  guide: GuidePerson[]
-  can_open_now: boolean
-  locked_until: string | null
-  attempts_left: number | null
-  contents_count: number
-  opened_at: string | null
-}
-
-export interface UploadTicket {
-  upload_url: string
-  method: 'PUT'
-  headers: Record<string, string>
-  s3_key: string
-  expires_in: number
-}
-
-export interface ContentView {
-  content_id: string
-  type: 'photo'
-  author_id: string
-  created_at: string
-  url: string
-}
-
-export interface OpenedContents {
-  key_photo_url: string
-  contents: ContentView[]
-  url_expires_in: number
-}
-
-export type OpenFailureReason =
-  | 'count_mismatch'
-  | 'pose_mismatch'
-  | 'body_not_visible'
-  | 'no_person'
-  | 'face_not_visible'
-  | 'face_mismatch'
-  | null
-
-export interface FacePersonResult {
-  position: number
-  visible: boolean
-  checked: boolean
-  ok: boolean
-  similarity: number | null
-  others: number | null
-}
-
-export interface MatchResult {
-  ok: boolean
-  reason: OpenFailureReason
-  score: number
-  message: string
-  expected_people: number
-  detected_people: number
-  mirrored: boolean
-  faces: FacePersonResult[]
-}
-
-export interface OpenResponse {
-  ok: boolean
-  result: MatchResult
-  attempts_left: number | null
-  locked_until: string | null
-  opened: OpenedContents | null
-  unlock: { token: string; expires_at: string | null } | null
-}
-
-export interface MemberView {
-  user_id: string
-  role: CapsuleRole
-  email: string | null
-}
-
-export interface InviteCreated {
-  token: string
-  expires_at: string
-}
-
-export interface InvitePreview {
-  capsule_id: string
-  capsule_name: string
-  open_date: string | null
-  days_until_open: number | null
-  people_count: number
-  members_count: number
-  invited_by: string
-  expires_at: string
-  already_member: boolean
 }
 
 export interface ApiErrorPayload {

@@ -1,0 +1,2622 @@
+{
+  "components": {
+    "schemas": {
+      "AddContentRequest": {
+        "properties": {
+          "s3_key": {
+            "description": "purpose=content でアップロードした写真",
+            "title": "S3 Key",
+            "type": "string"
+          },
+          "type": {
+            "const": "photo",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "s3_key"
+        ],
+        "title": "AddContentRequest",
+        "type": "object"
+      },
+      "CapsuleDetail": {
+        "properties": {
+          "attempts_left": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "ロックまでの残り回数。null は回数制限なし",
+            "title": "Attempts Left"
+          },
+          "can_open_now": {
+            "description": "開封日を過ぎていて、ロック中でない",
+            "title": "Can Open Now",
+            "type": "boolean"
+          },
+          "capsule_id": {
+            "title": "Capsule Id",
+            "type": "string"
+          },
+          "contents_count": {
+            "title": "Contents Count",
+            "type": "integer"
+          },
+          "cover_photo_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "任意の表紙画像。未設定なら null",
+            "title": "Cover Photo Url"
+          },
+          "days_until_open": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "開封日までの日数。開封日がなければ null",
+            "title": "Days Until Open"
+          },
+          "guide": {
+            "items": {
+              "$ref": "#/components/schemas/GuidePerson"
+            },
+            "title": "Guide",
+            "type": "array"
+          },
+          "key_photo_url": {
+            "title": "Key Photo Url",
+            "type": "string"
+          },
+          "locked_until": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locked Until"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "open_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Open Date"
+          },
+          "opened_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opened At"
+          },
+          "people_count": {
+            "title": "People Count",
+            "type": "integer"
+          },
+          "poses": {
+            "description": "鍵の写真の各人の体の点（左から順、詳細の guide[].points と同じ）。一覧でポーズの形だけを見せる用",
+            "items": {
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "number"
+                    },
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": "object"
+            },
+            "title": "Poses",
+            "type": "array"
+          },
+          "preview_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "鍵の写真に骨格を重ねたプレビュー",
+            "title": "Preview Url"
+          },
+          "role": {
+            "enum": [
+              "owner",
+              "member"
+            ],
+            "title": "Role",
+            "type": "string"
+          },
+          "status": {
+            "description": "opened は一度でも開けたことがある",
+            "enum": [
+              "locked",
+              "opened"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "url_expires_in": {
+            "title": "Url Expires In",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "capsule_id",
+          "name",
+          "open_date",
+          "days_until_open",
+          "status",
+          "people_count",
+          "role",
+          "key_photo_url",
+          "preview_url",
+          "url_expires_in",
+          "guide",
+          "can_open_now",
+          "locked_until",
+          "attempts_left",
+          "contents_count",
+          "opened_at"
+        ],
+        "title": "CapsuleDetail",
+        "type": "object"
+      },
+      "CapsuleSummary": {
+        "properties": {
+          "capsule_id": {
+            "title": "Capsule Id",
+            "type": "string"
+          },
+          "cover_photo_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "任意の表紙画像。未設定なら null",
+            "title": "Cover Photo Url"
+          },
+          "days_until_open": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "開封日までの日数。開封日がなければ null",
+            "title": "Days Until Open"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "open_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Open Date"
+          },
+          "people_count": {
+            "title": "People Count",
+            "type": "integer"
+          },
+          "poses": {
+            "description": "鍵の写真の各人の体の点（左から順、詳細の guide[].points と同じ）。一覧でポーズの形だけを見せる用",
+            "items": {
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "number"
+                    },
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": "object"
+            },
+            "title": "Poses",
+            "type": "array"
+          },
+          "role": {
+            "enum": [
+              "owner",
+              "member"
+            ],
+            "title": "Role",
+            "type": "string"
+          },
+          "status": {
+            "description": "opened は一度でも開けたことがある",
+            "enum": [
+              "locked",
+              "opened"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "capsule_id",
+          "name",
+          "open_date",
+          "days_until_open",
+          "status",
+          "people_count",
+          "role"
+        ],
+        "title": "CapsuleSummary",
+        "type": "object"
+      },
+      "ContentMeta": {
+        "properties": {
+          "author_id": {
+            "title": "Author Id",
+            "type": "string"
+          },
+          "content_id": {
+            "title": "Content Id",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "type": {
+            "const": "photo",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "content_id",
+          "type",
+          "author_id",
+          "created_at"
+        ],
+        "title": "ContentMeta",
+        "type": "object"
+      },
+      "ContentView": {
+        "properties": {
+          "author_id": {
+            "title": "Author Id",
+            "type": "string"
+          },
+          "content_id": {
+            "title": "Content Id",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "type": {
+            "const": "photo",
+            "title": "Type",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "content_id",
+          "type",
+          "author_id",
+          "created_at",
+          "url"
+        ],
+        "title": "ContentView",
+        "type": "object"
+      },
+      "CreateCapsuleRequest": {
+        "properties": {
+          "cover_photo_s3_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "任意の表紙画像。未設定なら通常のフォルダ表紙",
+            "title": "Cover Photo S3 Key"
+          },
+          "initial_photo_s3_keys": {
+            "description": "作成時にフォルダへ入れる写真（0〜20枚）",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Initial Photo S3 Keys",
+            "type": "array"
+          },
+          "key_photo_s3_key": {
+            "title": "Key Photo S3 Key",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "open_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "開封日（日本時間）。省略するといつでも開けられる",
+            "title": "Open Date"
+          }
+        },
+        "required": [
+          "name",
+          "key_photo_s3_key"
+        ],
+        "title": "CreateCapsuleRequest",
+        "type": "object"
+      },
+      "ErrorBody": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "ErrorBody",
+        "type": "object"
+      },
+      "ErrorResponse": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "title": "ErrorResponse",
+        "type": "object"
+      },
+      "FacePersonOut": {
+        "properties": {
+          "checked": {
+            "description": "顔の記憶があって判定したか",
+            "title": "Checked",
+            "type": "boolean"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "others": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "ほかの立ち位置の人の記憶との、いちばん高い類似度",
+            "title": "Others"
+          },
+          "position": {
+            "description": "左から何番目か（0始まり）",
+            "title": "Position",
+            "type": "integer"
+          },
+          "similarity": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "顔の記憶のうち、いちばん似ている顔との類似度（-1〜1）",
+            "title": "Similarity"
+          },
+          "visible": {
+            "description": "顔が見えたか",
+            "title": "Visible",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "position",
+          "visible",
+          "checked",
+          "ok",
+          "similarity",
+          "others"
+        ],
+        "title": "FacePersonOut",
+        "type": "object"
+      },
+      "GuidePerson": {
+        "properties": {
+          "angles": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Angles",
+            "type": "object"
+          },
+          "face_registered": {
+            "default": false,
+            "description": "顔の記憶があるか（鍵の写真で顔が見えなかった人は、最初に開けたときに覚える）",
+            "title": "Face Registered",
+            "type": "boolean"
+          },
+          "points": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "number"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "description": "体の12点の正規化座標 [x, y]（0〜1）",
+            "title": "Points",
+            "type": "object"
+          },
+          "position": {
+            "description": "左から何番目か（0始まり）",
+            "title": "Position",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "position",
+          "angles",
+          "points"
+        ],
+        "title": "GuidePerson",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "InviteCreated": {
+        "properties": {
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "token": {
+            "description": "招待リンクに埋め込む。例: https://<フロント>/invite/{token}",
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "expires_at"
+        ],
+        "title": "InviteCreated",
+        "type": "object"
+      },
+      "InvitePreview": {
+        "description": "招待リンクを開いた人に見せる情報。参加前なので写真や中身は含めない。",
+        "properties": {
+          "already_member": {
+            "title": "Already Member",
+            "type": "boolean"
+          },
+          "capsule_id": {
+            "title": "Capsule Id",
+            "type": "string"
+          },
+          "capsule_name": {
+            "title": "Capsule Name",
+            "type": "string"
+          },
+          "days_until_open": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Days Until Open"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "invited_by": {
+            "title": "Invited By",
+            "type": "string"
+          },
+          "members_count": {
+            "title": "Members Count",
+            "type": "integer"
+          },
+          "open_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Open Date"
+          },
+          "people_count": {
+            "description": "鍵の写真に写っている人数（開けるときに揃う必要がある人数）",
+            "title": "People Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "capsule_id",
+          "capsule_name",
+          "open_date",
+          "days_until_open",
+          "people_count",
+          "members_count",
+          "invited_by",
+          "expires_at",
+          "already_member"
+        ],
+        "title": "InvitePreview",
+        "type": "object"
+      },
+      "JointDiffOut": {
+        "properties": {
+          "attempt_deg": {
+            "title": "Attempt Deg",
+            "type": "number"
+          },
+          "diff_deg": {
+            "title": "Diff Deg",
+            "type": "number"
+          },
+          "key_deg": {
+            "title": "Key Deg",
+            "type": "number"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "key_deg",
+          "attempt_deg",
+          "diff_deg",
+          "ok"
+        ],
+        "title": "JointDiffOut",
+        "type": "object"
+      },
+      "MatchResultOut": {
+        "properties": {
+          "detected_people": {
+            "title": "Detected People",
+            "type": "integer"
+          },
+          "expected_people": {
+            "title": "Expected People",
+            "type": "integer"
+          },
+          "faces": {
+            "description": "顔の判定（ポーズが合ったときだけ入る）",
+            "items": {
+              "$ref": "#/components/schemas/FacePersonOut"
+            },
+            "title": "Faces",
+            "type": "array"
+          },
+          "message": {
+            "description": "そのまま画面に出せる声かけ",
+            "title": "Message",
+            "type": "string"
+          },
+          "mirrored": {
+            "title": "Mirrored",
+            "type": "boolean"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "people": {
+            "items": {
+              "$ref": "#/components/schemas/PersonResultOut"
+            },
+            "title": "People",
+            "type": "array"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "enum": [
+                  "count_mismatch",
+                  "pose_mismatch",
+                  "body_not_visible",
+                  "no_person",
+                  "face_not_visible",
+                  "face_mismatch"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "score": {
+            "description": "一致度ゲージ用 0〜100。許容値ちょうどで70。ポーズはこれが EMO_PASS_SCORE（既定55）以上で一致",
+            "title": "Score",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "ok",
+          "reason",
+          "score",
+          "message",
+          "expected_people",
+          "detected_people",
+          "mirrored",
+          "people"
+        ],
+        "title": "MatchResultOut",
+        "type": "object"
+      },
+      "MemberOut": {
+        "properties": {
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "role": {
+            "enum": [
+              "owner",
+              "member"
+            ],
+            "title": "Role",
+            "type": "string"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "role"
+        ],
+        "title": "MemberOut",
+        "type": "object"
+      },
+      "OpenRequest": {
+        "properties": {
+          "s3_key": {
+            "description": "purpose=attempt でアップロードした撮影画像",
+            "title": "S3 Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "s3_key"
+        ],
+        "title": "OpenRequest",
+        "type": "object"
+      },
+      "OpenResponse": {
+        "properties": {
+          "attempts_left": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "ロックまでの残り回数。null は回数制限なし",
+            "title": "Attempts Left"
+          },
+          "locked_until": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locked Until"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "opened": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OpenedContents"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "ok=true のときだけ入る"
+          },
+          "result": {
+            "$ref": "#/components/schemas/MatchResultOut"
+          },
+          "unlock": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UnlockSession"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "ok=true のときだけ入る。解除中の閲覧セッション"
+          }
+        },
+        "required": [
+          "ok",
+          "result",
+          "attempts_left",
+          "locked_until",
+          "opened"
+        ],
+        "title": "OpenResponse",
+        "type": "object"
+      },
+      "OpenedContents": {
+        "properties": {
+          "contents": {
+            "items": {
+              "$ref": "#/components/schemas/ContentView"
+            },
+            "title": "Contents",
+            "type": "array"
+          },
+          "key_photo_url": {
+            "title": "Key Photo Url",
+            "type": "string"
+          },
+          "url_expires_in": {
+            "title": "Url Expires In",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "key_photo_url",
+          "contents",
+          "url_expires_in"
+        ],
+        "title": "OpenedContents",
+        "type": "object"
+      },
+      "PersonResultOut": {
+        "properties": {
+          "joints": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JointDiffOut"
+            },
+            "title": "Joints",
+            "type": "object"
+          },
+          "max_diff_deg": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Diff Deg"
+          },
+          "mean_diff_deg": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mean Diff Deg"
+          },
+          "mean_point_diff": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mean Point Diff"
+          },
+          "missing_joints": {
+            "description": "当時は写っていたのに今は写っていない点。両肩が見えないときは shoulders",
+            "items": {
+              "type": "string"
+            },
+            "title": "Missing Joints",
+            "type": "array"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "points": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/PointDiffOut"
+            },
+            "description": "点の位置のずれ（両肩の中心が原点、肩幅が1）",
+            "title": "Points",
+            "type": "object"
+          },
+          "position": {
+            "title": "Position",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "position",
+          "ok",
+          "mean_diff_deg",
+          "max_diff_deg",
+          "joints"
+        ],
+        "title": "PersonResultOut",
+        "type": "object"
+      },
+      "PointDiffOut": {
+        "properties": {
+          "attempt": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Attempt",
+            "type": "array"
+          },
+          "diff": {
+            "description": "肩幅を1とした距離",
+            "title": "Diff",
+            "type": "number"
+          },
+          "key": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Key",
+            "type": "array"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "key",
+          "attempt",
+          "diff",
+          "ok"
+        ],
+        "title": "PointDiffOut",
+        "type": "object"
+      },
+      "UnlockSession": {
+        "properties": {
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null は期限なし",
+            "title": "Expires At"
+          },
+          "token": {
+            "description": "ライブラリの API に X-Unlock-Token ヘッダーで付ける",
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "expires_at"
+        ],
+        "title": "UnlockSession",
+        "type": "object"
+      },
+      "UploadRequest": {
+        "properties": {
+          "content_type": {
+            "default": "image/jpeg",
+            "enum": [
+              "image/jpeg",
+              "image/png",
+              "image/webp"
+            ],
+            "title": "Content Type",
+            "type": "string"
+          },
+          "purpose": {
+            "description": "key: 鍵写真 / cover: 表紙画像 / attempt: 開封時の撮影 / content: 中身の写真",
+            "enum": [
+              "key",
+              "cover",
+              "attempt",
+              "content"
+            ],
+            "title": "Purpose",
+            "type": "string"
+          }
+        },
+        "required": [
+          "purpose"
+        ],
+        "title": "UploadRequest",
+        "type": "object"
+      },
+      "UploadResponse": {
+        "properties": {
+          "expires_in": {
+            "title": "Expires In",
+            "type": "integer"
+          },
+          "headers": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "PUT のときに必ず付けるヘッダー",
+            "title": "Headers",
+            "type": "object"
+          },
+          "method": {
+            "const": "PUT",
+            "default": "PUT",
+            "title": "Method",
+            "type": "string"
+          },
+          "s3_key": {
+            "title": "S3 Key",
+            "type": "string"
+          },
+          "upload_url": {
+            "title": "Upload Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "upload_url",
+          "headers",
+          "s3_key",
+          "expires_in"
+        ],
+        "title": "UploadResponse",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "思い出の写真と同じポーズを、当時のメンバーが揃って再現したときだけ開くタイムカプセル。",
+    "title": "webタイムカプセル / エモ認証 API",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/capsules": {
+      "get": {
+        "operationId": "list_capsules_capsules_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-user-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-email",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Email"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CapsuleSummary"
+                  },
+                  "title": "Response List Capsules Capsules Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "自分のカプセル一覧",
+        "tags": [
+          "capsules"
+        ]
+      },
+      "post": {
+        "operationId": "create_capsule_capsules_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-user-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-email",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Email"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCapsuleRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CapsuleDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "カプセルを作成し、思い出の写真から鍵のポーズを抽出",
+        "tags": [
+          "capsules"
+        ]
+      }
+    },
+    "/capsules/{capsule_id}": {
+      "delete": {
+        "operationId": "delete_capsule_capsules__capsule_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "capsule_id",
+            "required": true,
+            "schema": {
+              "title": "Capsule Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-email",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Email"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "フォルダを削除（参加者なら誰でも）。鍵の写真・中身・顔の特徴量をすべて消す",
+        "tags": [
+          "capsules"
+        ]
+      },
+      "get": {
+        "operationId": "get_capsule_capsules__capsule_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "capsule_id",
+            "required": true,
+            "schema": {
+              "title": "Capsule Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-email",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Email"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CapsuleDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "カプセルの詳細（中身は含まない）",
+        "tags": [
+          "capsules"
+        ]
+      }
+    },
+    "/capsules/{capsule_id}/contents": {
+      "get": {
+        "operationId": "list_contents_capsules__capsule_id__contents_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "capsule_id",
+            "required": true,
+            "schema": {
+              "title": "Capsule Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-unlock-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Unlock-Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-email",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Email"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenedContents"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "ライブラリ（中身の一覧と閲覧URL）。解除中のみ。URLが切れたら呼び直す",
+        "tags": [
+          "capsules"
+        ]
+      },
+      "post": {
+        "operationId": "add_content_capsules__capsule_id__contents_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "capsule_id",
+            "required": true,
+            "schema": {
+              "title": "Capsule Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-email",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Email"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddContentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContentMeta"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "写真を追加（メンバーならいつでも）",
+        "tags": [
+          "capsules"
+        ]
+      }
+    },
+    "/capsules/{capsule_id}/contents/{content_id}": {
+      "delete": {
+        "operationId": "delete_content_capsules__capsule_id__contents__content_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "capsule_id",
+            "required": true,
+            "schema": {
+              "title": "Capsule Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "content_id",
+            "required": true,
+            "schema": {
+              "title": "Content Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-unlock-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Unlock-Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-email",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Email"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "中身を削除（解除中のみ。フォルダの参加者なら誰の写真でも消せる）",
+        "tags": [
+          "capsules"
+        ]
+      }
+    },
+    "/capsules/{capsule_id}/invites": {
+      "post": {
+        "operationId": "create_invite_capsules__capsule_id__invites_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "capsule_id",
+            "required": true,
+            "schema": {
+              "title": "Capsule Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-email",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Email"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InviteCreated"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "招待リンクを発行（作成者のみ）",
+        "tags": [
+          "invites"
+        ]
+      }
+    },
+    "/capsules/{capsule_id}/members": {
+      "get": {
+        "operationId": "list_members_capsules__capsule_id__members_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "capsule_id",
+            "required": true,
+            "schema": {
+              "title": "Capsule Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-email",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Email"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/MemberOut"
+                  },
+                  "title": "Response List Members Capsules  Capsule Id  Members Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "メンバー一覧",
+        "tags": [
+          "invites"
+        ]
+      }
+    },
+    "/capsules/{capsule_id}/open": {
+      "post": {
+        "operationId": "open_capsule_capsules__capsule_id__open_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "capsule_id",
+            "required": true,
+            "schema": {
+              "title": "Capsule Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-email",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Email"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "423": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Locked"
+          }
+        },
+        "summary": "エモ認証で開封（ポーズ照合）",
+        "tags": [
+          "capsules"
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Health Health Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "死活確認",
+        "tags": [
+          "system"
+        ]
+      }
+    },
+    "/invites/{token}": {
+      "get": {
+        "operationId": "get_invite_invites__token__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-email",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Email"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitePreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Gone"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "招待リンクの中身を確認（参加前でも見られる）",
+        "tags": [
+          "invites"
+        ]
+      }
+    },
+    "/invites/{token}/accept": {
+      "post": {
+        "operationId": "accept_invite_invites__token__accept_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-email",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Email"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CapsuleSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Gone"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "招待リンクから参加する",
+        "tags": [
+          "invites"
+        ]
+      }
+    },
+    "/uploads": {
+      "post": {
+        "operationId": "create_upload_uploads_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-user-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-email",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Email"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UploadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "アップロード用URLを発行",
+        "tags": [
+          "uploads"
+        ]
+      }
+    },
+    "/warmup": {
+      "post": {
+        "operationId": "warmup_warmup_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Warmup Warmup Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "モデルを読み込んで温める（発表直前に叩く）",
+        "tags": [
+          "system"
+        ]
+      }
+    }
+  }
+}
