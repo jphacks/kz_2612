@@ -78,10 +78,19 @@ def test_stranger_with_same_pose_cannot_open(env):
 
 def test_hidden_face_cannot_open(env):
     client, faces = setup(env)
+    app.dependency_overrides[deps.get_face_config] = lambda: FaceConfig(memory=2, max_hidden=0)
     cid = create(client).json()["capsule_id"]
     faces.embeddings = [A, None]
     res = open_with(client, cid).json()
     assert res["result"]["reason"] == "face_not_visible"
+
+
+def test_one_hidden_face_is_allowed_by_default(env):
+    # 既定では、横を向くなどで顔が見えない人が1人までなら開く
+    client, faces = setup(env)
+    cid = create(client).json()["capsule_id"]
+    faces.embeddings = [A, None]
+    assert open_with(client, cid).json()["ok"] is True
 
 
 def test_faces_not_checked_when_pose_fails(env):

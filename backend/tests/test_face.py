@@ -74,7 +74,7 @@ def test_margin_against_other_position():
 
 
 def test_hidden_face():
-    r = match_faces([new_memory(face(A)), new_memory(face(B))], [face(A), None], CFG)
+    r = match_faces([new_memory(face(A)), new_memory(face(B))], [face(A), None], FaceConfig(max_hidden=0))
     assert not r.ok
     assert r.reason == "face_not_visible"
     assert "右の人の顔が見えない" in r.message

@@ -72,19 +72,20 @@ RTMPose は画面外の関節も推測して返すので、確からしさ0.5未
 
 | 変数 | 既定 | 意味 |
 | --- | --- | --- |
-| `EMO_POINT_TOLERANCE` | 0.35 | 各人の点の位置のずれ（肩幅を1）の平均の許容値 |
-| `EMO_MAX_POINT_DIFF` | 1.0 | 1点だけ大きくずれたときの上限（肩幅の何倍か） |
-| `EMO_MAX_MISSING_POINTS` | 2 | 開けるとき、当時写っていた点が1人何点まで隠れてよいか |
+| `EMO_POINT_TOLERANCE` | 0.5 | 各人の点の位置のずれ（肩幅を1）の平均の許容値 |
+| `EMO_MAX_POINT_DIFF` | 1.5 | 1点だけ大きくずれたときの上限（肩幅の何倍か） |
+| `EMO_MAX_MISSING_POINTS` | 3 | 開けるとき、当時写っていた点が1人何点まで隠れてよいか |
 | `EMO_MIN_POINTS_PER_PERSON` | 2 | 鍵にするのに必要な、1人あたりの点（ひじ・手首・ひざ・足首）の数（両肩は必須） |
 | `EMO_JUDGE_WITH_ANGLES` | false | 関節の角度も合否に使うか（既定は表示用だけ） |
 | `EMO_FACE_CHECK` | true | 顔の判定をするか（YuNet＋SFace） |
-| `EMO_FACE_THRESHOLD` | 0.40 | 顔の記憶のうちいちばん似ている顔との類似度のしきい値 |
-| `EMO_FACE_MARGIN` | 0.05 | ほかの立ち位置の人の記憶より、どれだけ似ている必要があるか |
-| `EMO_MAX_HIDDEN_FACES` | 0 | 顔が見えなくてもよい人数 |
+| `EMO_FACE_THRESHOLD` | 0.32 | 顔の記憶のうちいちばん似ている顔との類似度のしきい値 |
+| `EMO_FACE_MARGIN` | 0.02 | ほかの立ち位置の人の記憶より、どれだけ似ている必要があるか |
+| `EMO_MAX_HIDDEN_FACES` | 1 | 顔が見えなくてもよい人数 |
+| `EMO_MIN_PERSON_RATIO` | 0.4 | いちばん大きく写っている人と比べて、肩幅がこの割合より小さい人（背景の奥の人）は数えない |
 | `EMO_FACE_MEMORY` | 5 | 開けたときの顔を1人何件まで覚えるか（鍵の写真の顔は別にずっと残す） |
 | `EMO_TOLERANCE_DEG` | 20 | 角度を使うときの、各人の平均角度差の許容値（度） |
 | `EMO_MAX_JOINT_DIFF_DEG` | 45 | 1関節だけ大きくずれたときの上限（度） |
-| `EMO_ALLOW_MIRROR` | false | 左右反転した撮影画像も一致とみなすか |
+| `EMO_ALLOW_MIRROR` | true | 左右反転した撮影画像も一致とみなすか |
 | `EMO_MIN_VISIBILITY` | 0.5 | これ未満の関節は「写っていない」として比較から外す |
 | `EMO_MIN_JOINTS_PER_PERSON` | 2 | 角度を使うとき、最低限比べられる関節数 |
 | `EMO_POSE_ENGINE` | rtmpose | 姿勢推定エンジン（`rtmpose` / `mediapipe`） |
