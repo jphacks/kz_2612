@@ -35,6 +35,7 @@ class RtmPoseDetector:
         pose_path: str | Path | None = None,
         min_score: float | None = None,
         min_points_per_person: int = 2,
+        min_person_ratio: float | None = None,
     ):
         from rtmlib import Body  # 起動を軽くするため、使うときに読み込む
 
@@ -53,6 +54,11 @@ class RtmPoseDetector:
         # 0.3 だと、画面外のひざ・足首を下端に寄せて推測した点（0.3〜0.47）まで拾ってしまう
         self.min_score = float(os.environ.get("EMO_RTM_MIN_SCORE", "0.5")) if min_score is None else min_score
         self.min_points_per_person = min_points_per_person
+        # いちばん大きく写っている人と比べて、肩幅がこの割合より小さい人は数えない。
+        # 背景の奥に座っている人を人数に数えてしまい「人数が違う」で開かなかったため（実測: 主役543px・奥の人112px／51px）
+        self.min_person_ratio = (
+            float(os.environ.get("EMO_MIN_PERSON_RATIO", "0.4")) if min_person_ratio is None else min_person_ratio
+        )
 
     def close(self) -> None:
         pass
@@ -68,10 +74,14 @@ class RtmPoseDetector:
         bgr = np.ascontiguousarray(np.asarray(image)[:, :, ::-1])
         keypoints, scores = self._body(bgr)
         w, h = image.size
+        # 両肩が見えない検出は、背景を人と見間違えたものとして捨てる
+        found = [(k, sc) for k, sc in zip(keypoints, scores) if min(sc[L_SHOULDER], sc[R_SHOULDER]) >= self.min_score]
+        # 写真の主役より、ずっと小さく写っている人（背景の奥の人）は数えない
+        widths = [float(np.hypot(*(k[L_SHOULDER] - k[R_SHOULDER]))) for k, _ in found]
+        largest = max(widths, default=0.0)
         people = []
-        for kpts, sc in zip(keypoints, scores):
-            # 両肩が見えない検出は、背景を人と見間違えたものとして捨てる
-            if min(sc[L_SHOULDER], sc[R_SHOULDER]) < self.min_score:
+        for (kpts, sc), width in zip(found, widths):
+            if width < largest * self.min_person_ratio:
                 continue
             lms = [Landmark(0.5, 0.5, 0.0) for _ in range(33)]
             for coco, mp_index in COCO_TO_MP.items():

@@ -65,6 +65,7 @@ def _fake_rtm(keypoints, scores, min_score=0.5):
     d = RtmPoseDetector.__new__(RtmPoseDetector)
     d.min_score = min_score
     d.min_points_per_person = 2
+    d.min_person_ratio = 0.4
     d._body = lambda bgr: (np.array([keypoints]), np.array([scores]))
     return d
 
@@ -99,3 +100,18 @@ def test_rtm_skips_detection_without_shoulders():
     scores = np.full(17, 0.9)
     scores[5] = 0.1  # 片方の肩が見えない → 背景の誤検出として捨てる
     assert _fake_rtm(_body_points(w, h), scores).detect(Image.new("RGB", (w, h))) == []
+
+
+def test_rtm_ignores_small_people_in_the_background():
+    # 主役（肩幅 300px）の奥に、小さく写った人（肩幅 60px）がいても人数に数えない
+    w, h = 1000, 800
+    scores = np.full(17, 0.9)
+    main = np.array([[500.0, 400.0]] * 17)
+    main[5], main[6] = [650, 300], [350, 300]
+    back = np.array([[120.0, 200.0]] * 17)
+    back[5], back[6] = [150, 180], [90, 180]
+    d = _fake_rtm(main, scores)
+    d._body = lambda bgr: (np.array([main, back]), np.array([scores, scores]))
+    assert len(d.detect(Image.new("RGB", (w, h)))) == 1
+    d.min_person_ratio = 0.0
+    assert len(d.detect(Image.new("RGB", (w, h)))) == 2

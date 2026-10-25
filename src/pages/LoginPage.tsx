@@ -1,7 +1,8 @@
-import { Camera, Images, Sparkles } from 'lucide-react'
 import { useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { AppShell } from '../components/AppShell'
+import { Constellation, seededPoses } from '../components/Constellation'
+import { Twinkles } from '../components/Decor'
 import { Button } from '../components/Ui'
 import {
   defaultDevelopmentEmail,
@@ -13,6 +14,9 @@ import {
   getSignedInUser,
   isCognitoConfigured,
 } from '../lib/auth'
+
+// ログイン画面の見本のポーズ（毎回同じ形）
+const SAMPLE_POSES = seededPoses('pose-to-open', 3)
 
 function GoogleMark() {
   return (
@@ -58,54 +62,47 @@ export function LoginPage() {
 
   return (
     <AppShell>
-      <div className="login-page">
-        <div className="brand-lockup">
-          <span className="brand-lockup__mark">
-            <Sparkles size={22} />
+      <div className="login-page lux-login">
+        <header className="lux-brand">Webタイムカプセル.</header>
+
+        <h1 className="lux-login__title">
+          あの日の写真のポーズで、<br />みんなのフォルダが開く。
+        </h1>
+
+        {/* ファインダーの中に、あの日のポーズの線（フォルダ一覧と同じ見せ方） */}
+        <div className="lux-login__hero" aria-hidden="true">
+          <span className="real-post__frame">
+            <span className="real-post__corners" />
+            <Constellation poses={SAMPLE_POSES} className="real-post__pose" />
+            <Twinkles count={4} />
           </span>
-          <span>Webタイムカプセル</span>
         </div>
 
-        <div className="login-visual" aria-hidden="true">
-          <div className="login-visual__photo login-visual__photo--back">
-            <Images size={34} />
-          </div>
-          <div className="login-visual__photo login-visual__photo--front">
-            <div className="pose-person pose-person--one" />
-            <div className="pose-person pose-person--two" />
-            <div className="pose-person pose-person--three" />
-          </div>
-          <span className="login-visual__spark login-visual__spark--one">✦</span>
-          <span className="login-visual__spark login-visual__spark--two">✦</span>
-        </div>
+        <p className="lux-lead">
+          思い出の写真を1枚「鍵」にして、写真フォルダをつくります。
+          当時のメンバーがもう一度集まって同じポーズをとると、フォルダが開きます。
+        </p>
 
-        <div className="login-copy">
-          <p className="eyebrow">POSE TO OPEN</p>
-          <h1>
-            あのポーズで、
-            <br />
-            思い出がひらく。
-          </h1>
-          <p>
-            みんなで写真のポーズを再現すると開く、
-            <br />
-            ちょっと特別な共有フォルダ。
-          </p>
-        </div>
+        <ol className="lux-steps">
+          <li><span>01</span>鍵にする写真を1枚選ぶ</li>
+          <li><span>02</span>みんなで集まって、同じポーズで撮る</li>
+          <li><span>03</span>ポーズと顔がそろったらフォルダが開き、写真を見たり入れたりできる</li>
+        </ol>
 
-        <div className="login-actions">
-          {!isCognitoConfigured && <label className="development-account-field">
-            <span>開発用メールアドレス</span>
-            <input
-              type="email"
-              value={email}
-              placeholder="you@example.com"
-              onChange={(event) => setEmail(event.target.value)}
-            />
-          </label>}
+        <div className="login-actions lux-login__actions">
+          {!isCognitoConfigured && (
+            <label className="development-account-field">
+              <span>開発用メールアドレス</span>
+              <input
+                type="email"
+                value={email}
+                placeholder="you@example.com"
+                onChange={(event) => setEmail(event.target.value)}
+              />
+            </label>
+          )}
           <Button
             fullWidth
-            variant="secondary"
             loading={signingIn}
             disabled={!isCognitoConfigured && !email.trim()}
             onClick={
@@ -114,7 +111,7 @@ export function LoginPage() {
                 : continueWithDevelopmentAccount
             }
           >
-            <GoogleMark />
+            {isCognitoConfigured && <GoogleMark />}
             {isCognitoConfigured ? 'Googleで続ける' : '開発用アカウントで進む'}
           </Button>
           {!isCognitoConfigured && (
@@ -124,11 +121,6 @@ export function LoginPage() {
           )}
           {error && <div className="api-error" role="alert">{error}</div>}
           <p>ログインすると利用規約とプライバシーポリシーに同意したことになります</p>
-        </div>
-
-        <div className="login-feature">
-          <Camera size={18} />
-          <span>写真認証では、鍵写真のポーズと顔の特徴を照合します</span>
         </div>
       </div>
     </AppShell>

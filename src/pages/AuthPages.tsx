@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Camera,
   Check,
@@ -14,11 +14,15 @@ import {
 } from 'lucide-react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { getCapsule, openCapsule, uploadImage } from '../api/client'
-import type { CapsuleDetail } from '../api/types'
+import type { CapsuleDetail, FacePersonResult } from '../api/types'
 import { AppShell, PageHeader } from '../components/AppShell'
+import { PhotoReveal } from '../components/Celebration'
+import { Twinkles } from '../components/Decor'
+import { PhotoWithPose } from '../components/Constellation'
 import { PoseOverlay } from '../components/PoseOverlay'
 import { Badge, Button, Card } from '../components/Ui'
 import { usePoseGuide } from '../hooks/usePoseGuide'
+import { rememberCapture, getRememberedCapture } from '../lib/capturePreview'
 import { captureVideoFrame } from '../lib/images'
 import { getPoseGuideFeedback } from '../lib/poseGuide'
 import {
@@ -76,34 +80,29 @@ export function UnlockPage() {
   const registeredFaceCount =
     folder?.guide.filter((person) => person.face_registered).length ?? 0
 
+  // 鍵の写真の骨格の点。点がない古いフォルダは線を重ねない
+  const poses = folder ? folder.guide.map((person) => person.points) : []
+
   return (
     <AppShell>
-      <div className="screen screen--unlock">
+      <div className="screen screen--unlock lux-unlock">
         <PageHeader title={folder?.name ?? '写真認証'} backTo="/folders" />
-        <div className="unlock-hero">
-          {folder?.preview_url ? (
-            <img className="unlock-hero__photo" src={folder.preview_url} alt="鍵写真のポーズガイド" />
+        <div className="lux-unlock__photo">
+          {folder?.key_photo_url ? (
+            <PhotoWithPose
+              src={folder.key_photo_url}
+              poses={poses}
+              alt={'鍵の写真（' + peopleCount + '人）'}
+            />
           ) : (
-            <>
-              <div className="unlock-hero__orbit unlock-hero__orbit--one" />
-              <div className="unlock-hero__orbit unlock-hero__orbit--two" />
-              <span className="unlock-hero__lock"><LockKeyhole size={32} /></span>
-            </>
+            <div className="lux-unlock__placeholder" aria-hidden="true" />
           )}
-          <div className="unlock-hero__people" aria-hidden="true">
-            {Array.from({ length: peopleCount || 2 }).map((_, index) => <span key={index} />)}
-          </div>
+          <Twinkles count={3} />
         </div>
 
-        <div className="unlock-copy">
-          <p className="eyebrow">
-            {peopleCount ? peopleCount + ' PEOPLE · POSE TO OPEN' : 'POSE TO OPEN'}
-          </p>
-          <h1>みんなでポーズを<br />再現して開こう</h1>
-          <p>
-            鍵写真と同じメンバーで、同じ立ち位置・ポーズをカメラの前で再現します。
-            ポーズが合うと顔も照合します。
-          </p>
+        <div className="lux-unlock__copy">
+          <h1>この写真のポーズを、<br />{peopleCount ? peopleCount + '人で' : 'みんなで'}再現しよう</h1>
+          <p>人数・立ち位置・ポーズがそろうと、顔も確かめてフォルダが開きます。</p>
           {folder && registeredFaceCount < peopleCount && (
             <small className="face-registration-note">
               顔が未登録の人は、最初に開いたときの顔を記憶します。
@@ -113,11 +112,11 @@ export function UnlockPage() {
 
         {error && <div className="api-error" role="alert">{error}</div>}
 
-        <Card className="how-to-card">
-          <span><i>1</i>鍵写真と同じメンバーで並ぶ</span>
-          <ChevronRight size={16} />
-          <span><i>2</i>顔を向けてポーズを合わせる</span>
-        </Card>
+        <ol className="lux-steps">
+          <li><span>01</span>鍵写真と同じメンバー{peopleCount ? '（' + peopleCount + '人）' : ''}でカメラの前に並ぶ</li>
+          <li><span>02</span>写真と同じ立ち位置・ポーズで、顔をカメラに向ける</li>
+          <li><span>03</span>撮影して、ポーズと顔がそろえば開く</li>
+        </ol>
 
         <div className="unlock-actions">
           {activeSession ? (
@@ -263,6 +262,7 @@ export function CameraPage() {
     setError('')
     try {
       const image = await captureVideoFrame(videoRef.current)
+      rememberCapture(folderId, image)
       const s3Key = await uploadImage(image, 'attempt')
       const response = await openCapsule(folderId, s3Key)
       saveAuthResult(folderId, response)
@@ -408,6 +408,45 @@ export function VerifyingPage() {
   )
 }
 
+function FaceResultCard({ faces }: { faces: FacePersonResult[] }) {
+  if (faces.length === 0) return null
+  return (
+    <Card className="face-result-card">
+      <div className="face-result-card__heading">
+        <ShieldCheck size={20} />
+        <div>
+          <strong>顔認証</strong>
+          <small>鍵写真と顔の特徴を照合しました</small>
+        </div>
+      </div>
+      <div className="face-result-list" aria-label="顔認証結果">
+        {faces.map((face) => (
+          <div
+            className={
+              'face-result-row ' +
+              (faceResultSucceeded(face) ? 'is-ok' : 'is-failed')
+            }
+            key={face.position}
+          >
+            <span className="face-result-row__mark">
+              {faceResultSucceeded(face) ? <Check size={15} /> : <X size={15} />}
+            </span>
+            <div>
+              <strong>{facePositionLabel(face.position, faces.length)}</strong>
+              <small>{faceResultLabel(face)}</small>
+            </div>
+            {face.checked && face.similarity !== null && (
+              <span className="face-result-row__score">
+                類似度 {face.similarity.toFixed(2)}
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+    </Card>
+  )
+}
+
 export function ResultPage() {
   const { folderId } = useParams()
   const navigate = useNavigate()
@@ -423,6 +462,19 @@ export function ResultPage() {
           <Button onClick={() => navigate(folderPath(folderId, '/camera'))}>撮影する</Button>
         </div>
       </AppShell>
+    )
+  }
+
+  if (success && result.opened) {
+    return (
+      <SuccessResult
+        folderId={folderId}
+        score={result.result.score}
+        message={result.result.message}
+        thenPhotoUrl={result.opened.key_photo_url}
+        nowPhotoUrl={getRememberedCapture(folderId)}
+        faces={faceResults}
+      />
     )
   }
 
@@ -450,41 +502,7 @@ export function ResultPage() {
           </div>
         )}
 
-        {faceResults.length > 0 && (
-          <Card className="face-result-card">
-            <div className="face-result-card__heading">
-              <ShieldCheck size={20} />
-              <div>
-                <strong>顔認証</strong>
-                <small>鍵写真と顔の特徴を照合しました</small>
-              </div>
-            </div>
-            <div className="face-result-list" aria-label="顔認証結果">
-              {faceResults.map((face) => (
-                <div
-                  className={
-                    'face-result-row ' +
-                    (faceResultSucceeded(face) ? 'is-ok' : 'is-failed')
-                  }
-                  key={face.position}
-                >
-                  <span className="face-result-row__mark">
-                    {faceResultSucceeded(face) ? <Check size={15} /> : <X size={15} />}
-                  </span>
-                  <div>
-                    <strong>{facePositionLabel(face.position, faceResults.length)}</strong>
-                    <small>{faceResultLabel(face)}</small>
-                  </div>
-                  {face.checked && face.similarity !== null && (
-                    <span className="face-result-row__score">
-                      類似度 {face.similarity.toFixed(2)}
-                    </span>
-                  )}
-                </div>
-              ))}
-            </div>
-          </Card>
-        )}
+        <FaceResultCard faces={faceResults} />
 
         {success && (
           <Card className="session-card">
@@ -505,6 +523,61 @@ export function ResultPage() {
             <ChevronRight size={18} />
           </Button>
           {!success && <small>試行回数に制限はありません</small>}
+        </div>
+      </div>
+    </AppShell>
+  )
+}
+
+/** 認証成功: 贈りものが開く演出のあとに、結果と「思い出を見る」ボタンを出す */
+function SuccessResult({
+  folderId,
+  score,
+  message,
+  thenPhotoUrl,
+  nowPhotoUrl,
+  faces,
+}: {
+  folderId: string | undefined
+  score: number
+  message: string
+  thenPhotoUrl: string
+  nowPhotoUrl?: string
+  faces: FacePersonResult[]
+}) {
+  const navigate = useNavigate()
+  const [revealed, setRevealed] = useState(false)
+  const handleDone = useCallback(() => setRevealed(true), [])
+
+  return (
+    <AppShell>
+      <div className="screen screen--result">
+        <PhotoReveal thenPhotoUrl={thenPhotoUrl} nowPhotoUrl={nowPhotoUrl} onDone={handleDone} />
+
+        <div className={'rv-after' + (revealed ? ' is-visible' : '')} aria-hidden={!revealed}>
+          <div className="result-heading">
+            <Badge tone="success">MATCH!</Badge>
+            <h1>あの日が、ひらきました</h1>
+            <p>{message}</p>
+            <strong className="result-score">一致度 {score}%</strong>
+          </div>
+
+          <FaceResultCard faces={faces} />
+
+          <Card className="session-card">
+            <LockKeyhole size={19} />
+            <div>
+              <strong>このタブでは開封状態をキープ</strong>
+              <p>画面を更新しても、最大12時間はそのまま見られます。</p>
+            </div>
+          </Card>
+
+          <div className="result-actions">
+            <Button fullWidth disabled={!revealed} onClick={() => navigate(folderPath(folderId, '/photos'))}>
+              思い出を見る
+              <ChevronRight size={18} />
+            </Button>
+          </div>
         </div>
       </div>
     </AppShell>
