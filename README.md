@@ -222,7 +222,7 @@ flowchart TB
 ### バックエンド・画像認識
 
 - Python / FastAPI / Pydantic / Mangum
-- YOLOX-m + RTMPose-m（人物検出・姿勢推定）
+- RTMPose-m（人物検出・姿勢推定）
 - OpenCV YuNet + SFace（顔検出・顔特徴量）
 - ONNX Runtime / NumPy / Pillow
 - pytest
